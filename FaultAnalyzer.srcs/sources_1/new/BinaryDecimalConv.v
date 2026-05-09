@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module BinaryDecimalConv #( 
+module BinaryDecimalConv #(
     parameter integer WIDTH = 16
 )(
     input wire [WIDTH-1:0] binary_in,

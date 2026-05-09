@@ -152,19 +152,40 @@ IP.
 
 ## Top-Level Wiring
 
-Top-level board ports should be named to match the constraints:
+Top-level board ports use the current `TopModule.v` names and must match
+`FaultAnalyzer.srcs/constrs_1/new/FaultAnalyzer.xdc` exactly:
 
-| Signal | Nexys A7 FPGA Pin | Direction | Use |
-| --- | --- | --- | --- |
-| `CLK100MHZ` | E3 | Input | 100 MHz system clock |
-| `jtag_tck` | C17, JA1 | Output | Nexys to Kiwi TCK |
-| `jtag_tms` | D18, JA2 | Output | Nexys to Kiwi TMS |
-| `jtag_tdi` | E18, JA3 | Output | Nexys to Kiwi TDI |
-| `jtag_tdo` | G17, JA4 | Input | Kiwi to Nexys TDO |
+| TopModule Port | Nexys A7 FPGA Pin / Connector | Direction | Kiwi Connection | Use |
+| :--- | :--- | :--- | :--- | :--- |
+| `clk_i` | E3 / `CLK100MHZ` | Input | none | 100 MHz system clock |
+| jtag_tck_o | C17 / JA1 | Output | J2 pin 6 JTCK | Nexys to Kiwi TCK |
+| jtag_tms_o | D18 / JA2 | Output | J2 pin 5 JTMS | Nexys to Kiwi TMS |
+| jtag_tdi_o | E18 / JA3 | Output | J2 pin 4 JTDI | Nexys to Kiwi TDI |
+| jtag_tdo_i | G17 / JA4 | Input | J2 pin 7 JTDO | Kiwi to Nexys TDO |
+| Ground | JA5 or JA11 | Reference | J2 pin 2, 9, or 23 `GND` | Shared signal reference |
 
-All JA JTAG signals use `LVCMOS33`. Connect Nexys ground to Kiwi ground. Keep
-the Kiwi board powered from its own input; the Nexys only drives the JTAG logic
-signals.
+All JA JTAG signals use `LVCMOS33`. The Kiwi 1P5 header I/O voltage is 3.3 V,
+so the voltage standards are compatible for logic-level JTAG. Connect a shared
+ground. Do not connect the Nexys Pmod 3.3 V pins to the Kiwi power rails for
+this test; keep the Kiwi powered from its own USB-C input and use the Nexys only
+as a logic-level JTAG master.
+
+Before driving the Kiwi TAP from the Nexys, set the Kiwi JTAG switch for
+external JTAG access. The OneKiwi datasheet states that switch ON connects the
+onboard USB-JTAG debugger to the FPGA, while switch OFF disconnects the FPGA
+from USB-JTAG for external programming. For this project, use the external
+position so the Nexys and onboard Gowin debugger do not drive the same TAP at
+the same time.
+
+Suggested bring-up order:
+
+1. Program the Nexys A7 with `FaultAnalyzer`.
+2. Power the Kiwi 1P5 from USB-C.
+3. Set the Kiwi JTAG switch to the external position.
+4. Wire JA1-to-J2.6, JA2-to-J2.5, JA3-to-J2.4, JA4-to-J2.7, and ground-to-ground.
+5. Press BTND on the Nexys to reset the analyzer.
+6. Press BTNC or set SW0 high to run one IDCODE scan.
+7. Check LEDs, seven-segment display, UART, or VGA for `32'h0120_681B` and pass status.
 
 Internal wiring should follow this flow:
 
@@ -248,5 +269,6 @@ Required scenarios:
 | Digilent Nexys-A7-100T Master XDC | https://github.com/Digilent/digilent-xdc/blob/master/Nexys-A7-100T-Master.xdc | `CLK100MHZ` pin E3 and Pmod JA pin/package mappings with `LVCMOS33`. |
 | Gowin KIWI 1P5 devkit page | https://www.gowinsemi.com/en/support/devkits_detail/71/ | KIWI 1P5QN48XF target, `GW1N-UV1P5QN48XF`, onboard USB-JTAG, onboard USB-UART, external programming DIP switch support. |
 | OneKiwi KIWI 1P5 product page | https://onekiwi.com.vn/products/kiwi-1p5-fpga-board/ | KIWI 1P5 board features, 1,584 LUT target, onboard debugger, USB-UART, external FPGA programming support. |
+| OneKiwi KIWI 1P5 datasheet | https://onekiwi.com.vn/wp-content/uploads/2025/02/OneKiwi-Kiwi-1P5-FGPA-Brief-Datasheet-Rev2.2-Black-PCB-Version.pdf | 3.3 V I/O voltage, J2 JTAG pinout, and JTAG switch ON/OFF behavior. |
 | Gowin UG290 Programming and Configuration Guide | https://cdn.gowinsemi.com.cn/UG290E.pdf | JTAG conformance, timing limits, TAP reset, IR/DR scan behavior, 8-bit IR, Read ID opcode `0x11`, expected GW1N-1P5 IDCODE `32'h0120_681B`. |
 | AMD FIFO Generator native interface documentation | https://docs.amd.com/r/en-US/pg327-emb-fifo-gen/Native-FIFO-Interface-Signals | Native FIFO signal meanings for `clk`, reset, `din`, `wr_en`, `rd_en`, `dout`, `full`, `empty`, `almost_full`, `valid`, and `underflow`. |

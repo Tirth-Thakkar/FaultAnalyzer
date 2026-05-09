@@ -35,6 +35,8 @@ module FaultAnalyzer_tb;
   reg [15:0] tb_timemux_vals;
   wire [3:0] tb_timemux_seg;
   wire [3:0] tb_timemux_anodes;
+  reg [3:0] tb_uart_char_index_force;
+  reg [63:0] tb_status_event_word;
   integer tb_fail_count;
 
   TopModule dut (
@@ -111,14 +113,14 @@ module FaultAnalyzer_tb;
       tb_rst = 1'b1;
       tb_wait_cycles(`TB_RESET_CYCLES);
       tb_rst = 1'b0;
-      tb_wait_cycles(1);
+      tb_wait_cycles(`TB_RESET_RELEASE_CYCLES);
     end
   endtask
 
   task automatic tb_expect_equal32;
     input [31:0] actual;
     input [31:0] expected;
-    input [255:0] label;
+    input [1023:0] label;
     begin
       if (actual !== expected) begin
         tb_fail_count = tb_fail_count + 1;
@@ -155,6 +157,8 @@ module FaultAnalyzer_tb;
     tb_sseg_val = 4'd0;
     tb_sseg_anodes = 8'hFF;
     tb_timemux_vals = 16'd0;
+    tb_uart_char_index_force = 4'd0;
+    tb_status_event_word = 64'd0;
     tb_fail_count = 0;
 
     tb_test_topmodule();

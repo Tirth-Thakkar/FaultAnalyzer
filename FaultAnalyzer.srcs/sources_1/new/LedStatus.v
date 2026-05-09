@@ -16,18 +16,18 @@ module LedStatus (
     output wire [15:0] led
 );
 
-  assign led[0] = scan_done;
-  assign led[1] = scan_done && id_match;
-  assign led[2] = scan_done && !id_match;
-  assign led[3] = fifo_empty;
-  assign led[4] = fifo_full;
-  assign led[5] = fifo_overflow;
-  assign led[6] = fifo_underflow;
-  assign led[7] = uart_busy;
-  assign led[11:8] = jtag_state;
-  assign led[12] = jtag_tck;
-  assign led[13] = jtag_tms;
-  assign led[14] = jtag_tdi;
-  assign led[15] = jtag_tdo;
+    assign led[0] = scan_done;
+    assign led[1] = scan_done && id_match;
+    assign led[2] = scan_done && !id_match;
+    assign led[3] = fifo_empty;
+    assign led[4] = fifo_full;
+    assign led[5] = fifo_overflow;
+    assign led[6] = fifo_underflow;
+    assign led[7] = uart_busy;
+    assign led[11:8] = jtag_state;
+    assign led[12] = jtag_tck;
+    assign led[13] = jtag_tms;
+    assign led[14] = jtag_tdi;
+    assign led[15] = jtag_tdo;
 
 endmodule

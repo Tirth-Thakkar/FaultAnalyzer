@@ -1,0 +1,14 @@
+FaultAnalyzer.srcs/sources_1/new/BinaryDecimalConv.v
+FaultAnalyzer.srcs/sources_1/new/GateMux.v
+FaultAnalyzer.srcs/sources_1/new/JTAG.v
+FaultAnalyzer.srcs/sources_1/new/LedStatus.v
+FaultAnalyzer.srcs/sources_1/new/SevenSegDecoder.v
+FaultAnalyzer.srcs/sources_1/new/StatusReg.v
+FaultAnalyzer.srcs/sources_1/new/TimeMux.v
+FaultAnalyzer.srcs/sources_1/new/UartRx.v
+FaultAnalyzer.srcs/sources_1/new/UartTx.v
+FaultAnalyzer.srcs/sources_1/new/VGA.v
+FaultAnalyzer.ip_user_files/ip/fifo_event_buffer/fifo_event_buffer_stub.v
+FaultAnalyzer.srcs/sources_1/new/TopModule.v
++incdir+FaultAnalyzer.srcs/sim_1/new
+FaultAnalyzer.srcs/sim_1/new/FaultAnalyzer_tb.v
