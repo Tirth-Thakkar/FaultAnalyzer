@@ -177,6 +177,44 @@ from USB-JTAG for external programming. For this project, use the external
 position so the Nexys and onboard Gowin debugger do not drive the same TAP at
 the same time.
 
+## Expected Output When Configured
+
+After the board is programmed, the Kiwi switch is set for external JTAG, and
+the target is wired correctly, the design waits for a scan request. While the
+system is idle, the seven-segment display shows the expected Gowin IDCODE
+`32'h0120_681B`. When BTNC is pressed or SW0 is asserted, the JTAG engine runs
+one IDCODE scan, records one 64-bit event in the FIFO, and updates the status
+logic.
+
+A successful scan should produce these outputs:
+
+| Output | Expected behavior |
+| --- | --- |
+| `led_o` | Pass and status indication through `LedStatus`, including scan state, IDCODE match, FIFO status, and JTAG state. |
+| `seg_o` / `an_o` | The captured IDCODE after `scan_done` is asserted. While idle, the display shows the expected IDCODE. |
+| `dp_o` | Held inactive in the current top-level. |
+| `uart_txd_o` | A single UART line in the form `P ID=0120681B\r\n` for a pass, or `F ID=<captured>\r\n` for a failure. |
+| `vga_red_o` / `vga_green_o` / `vga_blue_o` / `vga_hs_o` / `vga_vs_o` | A VGA status screen showing the scan result, IDCODE, and FIFO/JTAG state. |
+
+If the target does not respond as expected, the same outputs report fail status
+and the recorded error flags instead of pass status.
+
+## Input Summary
+
+| Input | What it does | Notes |
+| --- | --- | --- |
+| `clk_i` | 100 MHz master clock. | Feeds the synchronizers, JTAG engine, FIFO, status logic, UART timing, and VGA timing. |
+| `sw_i[0]` | Starts one IDCODE scan. | Same function as BTNC. |
+| `sw_i[14]` | Reads one queued FIFO event. | Only advances the FIFO when it is not empty. |
+| `sw_i[1:13]` and `sw_i[15]` | Reserved in the current top-level. | Synchronized but not used by the present design. |
+| `btnc_i` | Starts one IDCODE scan. | Same function as SW0. |
+| `btnd_i` | Resets the analyzer. | Clears the synchronized control state and downstream status logic. |
+| `btnu_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
+| `btnl_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
+| `btnr_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
+| `jtag_tdo_i` | Samples the target board TDO line. | Input from the Kiwi target during the JTAG scan. |
+| `uart_rxd_i` | UART receive input. | Connected to the UART RX IP, but not currently used to drive system behavior. |
+
 Suggested bring-up order:
 
 1. Program the Nexys A7 with `FaultAnalyzer`.
