@@ -3,7 +3,8 @@
 module JTAG #(
     parameter integer CLK_FREQ_HZ = 100_000_000,
     parameter integer TCK_HZ = 2_000_000,
-    parameter [7:0] EXPECTED_BOUNDARY_DATA = 8'h00,
+    parameter integer BOUNDARY_WIDTH = 6,
+    parameter [BOUNDARY_WIDTH-1:0] EXPECTED_BOUNDARY_DATA = {BOUNDARY_WIDTH{1'b0}},
     parameter [1:0] BOUNDARY_OPCODE = 2'b01,
     parameter integer TIMEOUT_CYCLES = 1_000_000
 ) (
@@ -14,7 +15,7 @@ module JTAG #(
     input wire tdo,
     input wire use_internal_target,
     input wire [3:0] boundary_inputs,
-    input wire [7:0] boundary_scan_data,
+    input wire [BOUNDARY_WIDTH-1:0] boundary_scan_data,
 
     output wire tck,
     output reg tms,
@@ -22,7 +23,7 @@ module JTAG #(
     output reg busy,
     output reg done,
     output reg [31:0] captured_idcode,
-    output reg [7:0] captured_boundary,
+    output reg [BOUNDARY_WIDTH-1:0] captured_boundary,
     output reg id_match,
     output reg tdo_stuck_high,
     output reg tdo_stuck_low,
@@ -47,7 +48,7 @@ module JTAG #(
     localparam integer TAP_RESET_TCKS = 5;
     localparam integer POST_IR_IDLE_TCKS = 3;
     localparam integer IR_BIT_COUNT = 2;
-    localparam integer DR_BOUNDARY_BIT_COUNT = 8;
+    localparam integer DR_BOUNDARY_BIT_COUNT = BOUNDARY_WIDTH;
 
     localparam [5:0] IR_LAST_BIT_INDEX = IR_BIT_COUNT - 1;
     localparam [5:0] IR_NEXT_TO_LAST_BIT_INDEX = IR_BIT_COUNT - 2;
@@ -92,6 +93,7 @@ module JTAG #(
     reg tdo_seen_all_one;
     reg [15:0] timestamp;
     reg [31:0] watchdog_count;
+    wire [31:0] boundary_status_word;
 
 
     // Synchronized TDO input
@@ -106,6 +108,7 @@ module JTAG #(
     wire effective_match;
     wire selected_tdo;
 
+    assign boundary_status_word = {{(32-BOUNDARY_WIDTH){1'b0}}, captured_boundary};
     assign tck = tck_reg;
     assign tck_half_tick = (tck_divider_count == (TCK_HALF_DIVIDER - 1));
     assign tck_rising_edge = tck_half_tick && !tck_reg;
@@ -157,7 +160,7 @@ module JTAG #(
             busy <= 1'b0;
             done <= 1'b0;
             captured_idcode <= 32'd0;
-            captured_boundary <= 8'd0;
+            captured_boundary <= {BOUNDARY_WIDTH{1'b0}};
             id_match <= 1'b0;
             tdo_stuck_high <= 1'b0;
             tdo_stuck_low <= 1'b0;
@@ -189,10 +192,9 @@ module JTAG #(
                 done <= 1'b1;
                 timeout_error <= 1'b1;
                 id_match <= 1'b0;
-                captured_idcode <= {24'd0, captured_boundary};
+                captured_idcode <= boundary_status_word;
                 event_word <= {
-                    24'd0,
-                    captured_boundary,
+                    boundary_status_word,
                     1'b0,
                     tdo_seen_all_one,
                     ~tdo_seen_one,
@@ -213,7 +215,7 @@ module JTAG #(
                     shift_count <= 6'd0;
                     idle_count <= 2'd0;
                     captured_idcode <= 32'd0;
-                    captured_boundary <= 8'd0;
+                    captured_boundary <= {BOUNDARY_WIDTH{1'b0}};
                     tdo_seen_one <= 1'b0;
                     tdo_seen_all_one <= 1'b1;
                     tdo_stuck_high <= 1'b0;
@@ -339,14 +341,13 @@ module JTAG #(
                             state <= ST_IDLE;
                             busy <= 1'b0;
                             done <= 1'b1;
-                            captured_idcode <= {24'd0, captured_boundary};
+                            captured_idcode <= boundary_status_word;
                             id_match <= effective_match;
                             tdo_stuck_high <= tdo_seen_all_one;
                             tdo_stuck_low <= ~tdo_seen_one;
                             timeout_error <= 1'b0;
                             event_word <= {
-                                24'd0,
-                                captured_boundary,
+                                boundary_status_word,
                                 effective_match,
                                 tdo_seen_all_one,
                                 ~tdo_seen_one,

@@ -40,7 +40,8 @@ module TopModule (
 
     // Boundary-scan parameters
     localparam [31:0] EXPECTED_GOWIN_IDCODE = 32'h0000_0000;
-    localparam [7:0] EXPECTED_BOUNDARY_DATA = 8'h00;
+    localparam integer JTAG_BOUNDARY_WIDTH = 6;
+    localparam [JTAG_BOUNDARY_WIDTH-1:0] EXPECTED_BOUNDARY_DATA = {JTAG_BOUNDARY_WIDTH{1'b0}};
     localparam [1:0] JTAG_BOUNDARY_OPCODE = 2'b01;
 
 
@@ -94,7 +95,7 @@ module TopModule (
     wire jtag_timeout;
     wire [3:0] jtag_state;
     wire [31:0] jtag_idcode;
-    wire [7:0] jtag_boundary_data;
+    wire [JTAG_BOUNDARY_WIDTH-1:0] jtag_boundary_data;
     wire [63:0] jtag_event_word;
     wire jtag_event_valid;
     wire boundary_i;
@@ -329,6 +330,7 @@ module TopModule (
     JTAG #(
         .CLK_FREQ_HZ(CLK_FREQ_HZ),
         .TCK_HZ(JTAG_TCK_HZ),
+        .BOUNDARY_WIDTH(JTAG_BOUNDARY_WIDTH),
         .EXPECTED_BOUNDARY_DATA(EXPECTED_BOUNDARY_DATA),
         .BOUNDARY_OPCODE(JTAG_BOUNDARY_OPCODE)
     ) u_jtag (
@@ -340,7 +342,7 @@ module TopModule (
         .tdo(jtag_tdo_i),
         .use_internal_target(1'b1),
         .boundary_inputs(boundary_inputs),
-        .boundary_scan_data(8'h00),
+        .boundary_scan_data({JTAG_BOUNDARY_WIDTH{1'b0}}),
         .tck(jtag_tck_o),
         .tms(jtag_tms_o),
         .tdi(jtag_tdi_o),
