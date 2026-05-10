@@ -2,10 +2,13 @@
 
 module TopModule (
     input wire clk_i,
-    input wire [15:0] SW,
+    input wire [15:0] sw_i,
 
-    input wire BNTC, //Top button
-    input wire BTND, //Bottom Button
+    input wire btnc_i,
+    input wire btnu_i,
+    input wire btnd_i,
+    input wire btnl_i,
+    input wire btnr_i,
 
     input wire jtag_tdo_i,
     output wire jtag_tck_o,
@@ -13,12 +16,12 @@ module TopModule (
     output wire jtag_tdi_o,
     output wire [15:0] led_o,
 
-    output wire [6:0] seg,
-    output wire [7:0] an,
-    output wire dp,
+    output wire [6:0] seg_o,
+    output wire [7:0] an_o,
+    output wire dp_o,
 
-    output wire UART_RXD_OUT,
-    input wire UART_TXD_IN,
+    output wire uart_txd_o,
+    input wire uart_rxd_i,
 
     output wire [3:0] vga_red_o,
     output wire [3:0] vga_green_o,
@@ -39,10 +42,16 @@ module TopModule (
 
 
     // Boundary-scan parameters
-    localparam [31:0] EXPECTED_GOWIN_IDCODE = 32'h0000_0000;
-    localparam integer JTAG_BOUNDARY_WIDTH = 6;
-    localparam [JTAG_BOUNDARY_WIDTH-1:0] EXPECTED_BOUNDARY_DATA = {JTAG_BOUNDARY_WIDTH{1'b0}};
-    localparam [1:0] JTAG_BOUNDARY_OPCODE = 2'b01;
+    localparam [31:0] EXPECTED_GOWIN_IDCODE = 32'h0120_681B;
+    localparam [7:0] JTAG_IDCODE_OPCODE = 8'h11;
+    localparam [7:0] JTAG_SAMPLE_OPCODE = 8'h01;
+    localparam integer GOWIN_BOUNDARY_REGISTER_BITS = 244;
+    localparam integer GOWIN_BOUNDARY_PIN_COUNT = 36;
+    localparam [7:0] EXPECTED_BOUNDARY_DATA = 8'h00;
+    localparam [7:0] JTAG_BOUNDARY_OPCODE = JTAG_SAMPLE_OPCODE;
+
+    localparam [7:0] JTAG_EVENT_TYPE_IDCODE = 8'h01;
+    localparam [7:0] JTAG_EVENT_TYPE_BOUNDARY_PIN = 8'h02;
 
 
     // Board control mapping
@@ -51,8 +60,10 @@ module TopModule (
     localparam integer SW_BOUNDARY_B = 2;
     localparam integer SW_BOUNDARY_C = 3;
     localparam integer SW_BOUNDARY_D = 4;
+    localparam integer SW_FIFO_READ = 14;
     localparam integer BTN_CENTER = 0;
     localparam integer BTN_DOWN = 1;
+    localparam integer BTN_UP = 2;
 
 
     // UART diagnostic message format
@@ -74,16 +85,19 @@ module TopModule (
 
 
     // Synchronized board controls
-    wire [1:0] button_raw;
+    wire [2:0] button_raw;
     wire [15:0] sw_sync;
-    wire [1:0] button_sync;
+    wire [2:0] button_sync;
     wire rst;
     wire start_scan;
+    wire fifo_read_control;
+    wire fifo_read_request;
 
     reg [15:0] sw_meta_reg = 16'd0;
     reg [15:0] sw_sync_reg = 16'd0;
-    reg [1:0] button_meta_reg = 2'd0;
-    reg [1:0] button_sync_reg = 2'd0;
+    reg [2:0] button_meta_reg = 3'd0;
+    reg [2:0] button_sync_reg = 3'd0;
+    reg fifo_read_control_d = 1'b0;
 
 
     // JTAG scan
@@ -95,7 +109,7 @@ module TopModule (
     wire jtag_timeout;
     wire [3:0] jtag_state;
     wire [31:0] jtag_idcode;
-    wire [JTAG_BOUNDARY_WIDTH-1:0] jtag_boundary_data;
+    wire [7:0] jtag_boundary_data;
     wire [63:0] jtag_event_word;
     wire jtag_event_valid;
     wire boundary_i;
@@ -133,6 +147,17 @@ module TopModule (
     wire [15:0] status_led_bus;
 
 
+    // FIFO-driven boundary-cell display state
+    reg display_fifo_seen = 1'b0;
+    reg [31:0] display_word = EXPECTED_GOWIN_IDCODE;
+    reg [7:0] display_event_type = JTAG_EVENT_TYPE_IDCODE;
+    reg [7:0] display_boundary_pin = 8'd0;
+    reg [7:0] display_boundary_cell = 8'd0;
+    reg [7:0] display_boundary_ordinal = 8'd0;
+    reg display_boundary_control = 1'b0;
+    reg display_boundary_value = 1'b0;
+
+
     // UART diagnostic adapter
     reg uart_clk = 1'b0;
     reg [UART_CLK_DIVISOR_BITS-1:0] uart_clk_divider = {UART_CLK_DIVISOR_BITS{1'b0}};
@@ -164,11 +189,13 @@ module TopModule (
 
 
     // Board control and subsystem wiring
-    assign button_raw = {btnd_i, btnc_i};
+    assign button_raw = {btnu_i, btnd_i, btnc_i};
     assign sw_sync = sw_sync_reg;
     assign button_sync = button_sync_reg;
     assign rst = button_sync[BTN_DOWN];
     assign start_scan = button_sync[BTN_CENTER] | sw_sync[SW_START_SCAN];
+    assign fifo_read_control = button_sync[BTN_UP] | sw_sync[SW_FIFO_READ];
+    assign fifo_read_request = fifo_read_control && !fifo_read_control_d;
     assign boundary_inputs = {
         sw_sync[SW_BOUNDARY_D],
         sw_sync[SW_BOUNDARY_C],
@@ -178,9 +205,10 @@ module TopModule (
 
     assign fifo_wr_en = jtag_event_valid && !fifo_full;
     assign fifo_overflow_attempt = jtag_event_valid && fifo_full;
-    assign fifo_rd_en = 1'b0;
+    assign fifo_rd_en = fifo_read_request && !fifo_empty;
 
-    assign seven_seg_value = status_scan_done ? status_idcode : EXPECTED_GOWIN_IDCODE;
+    assign seven_seg_value = display_fifo_seen ? display_word :
+        (status_scan_done ? status_idcode : EXPECTED_GOWIN_IDCODE);
     assign dp_o = 1'b1;
     assign uart_txd_o = uart_tx_active ? uart_tx_serial : 1'b1;
 
@@ -252,6 +280,50 @@ module TopModule (
         button_sync_reg <= button_meta_reg;
     end
 
+    always @(posedge clk_i) begin : proc_fifo_display_reader
+        if (rst) begin
+            fifo_read_control_d <= 1'b0;
+            display_fifo_seen <= 1'b0;
+            display_word <= EXPECTED_GOWIN_IDCODE;
+            display_event_type <= JTAG_EVENT_TYPE_IDCODE;
+            display_boundary_pin <= 8'd0;
+            display_boundary_cell <= 8'd0;
+            display_boundary_ordinal <= 8'd0;
+            display_boundary_control <= 1'b0;
+            display_boundary_value <= 1'b0;
+        end else begin
+            fifo_read_control_d <= fifo_read_control;
+
+            if (jtag_busy) begin
+                display_fifo_seen <= 1'b0;
+            end
+
+            if (fifo_valid) begin
+                display_fifo_seen <= 1'b1;
+                display_event_type <= fifo_dout[23:16];
+
+                if (fifo_dout[23:16] == JTAG_EVENT_TYPE_BOUNDARY_PIN) begin
+                    display_boundary_pin <= fifo_dout[63:56];
+                    display_boundary_cell <= fifo_dout[55:48];
+                    display_boundary_ordinal <= fifo_dout[39:32];
+                    display_boundary_value <= fifo_dout[31];
+                    display_boundary_control <= fifo_dout[30];
+                    display_word <= {
+                        fifo_dout[63:56],
+                        fifo_dout[55:48],
+                        fifo_dout[39:32],
+                        4'h0,
+                        2'b00,
+                        fifo_dout[30],
+                        fifo_dout[31]
+                    };
+                end else begin
+                    display_word <= fifo_dout[63:32];
+                end
+            end
+        end
+    end
+
     always @(posedge clk_i) begin : proc_uart_clock_divider
         if (rst) begin
             uart_clk_divider <= {UART_CLK_DIVISOR_BITS{1'b0}};
@@ -267,7 +339,7 @@ module TopModule (
             uart_event_toggle_sys <= 1'b0;
             uart_event_match_sys <= 1'b0;
             uart_event_idcode_sys <= 32'd0;
-        end else if (jtag_event_valid) begin
+        end else if (jtag_event_valid && (jtag_event_word[23:16] == JTAG_EVENT_TYPE_IDCODE)) begin
             uart_event_toggle_sys <= ~uart_event_toggle_sys;
             uart_event_match_sys <= jtag_event_word[31];
             uart_event_idcode_sys <= jtag_event_word[63:32];
@@ -330,9 +402,13 @@ module TopModule (
     JTAG #(
         .CLK_FREQ_HZ(CLK_FREQ_HZ),
         .TCK_HZ(JTAG_TCK_HZ),
-        .BOUNDARY_WIDTH(JTAG_BOUNDARY_WIDTH),
-        .EXPECTED_BOUNDARY_DATA(EXPECTED_BOUNDARY_DATA),
-        .BOUNDARY_OPCODE(JTAG_BOUNDARY_OPCODE)
+        .EXPECTED_IDCODE(EXPECTED_GOWIN_IDCODE),
+        .IDCODE_OPCODE(JTAG_IDCODE_OPCODE),
+        .BOUNDARY_OPCODE(JTAG_BOUNDARY_OPCODE),
+        .BOUNDARY_REGISTER_BITS(GOWIN_BOUNDARY_REGISTER_BITS),
+        .BOUNDARY_PIN_COUNT(GOWIN_BOUNDARY_PIN_COUNT),
+        .BOUNDARY_WIDTH(8),
+        .EXPECTED_BOUNDARY_DATA(EXPECTED_BOUNDARY_DATA)
     ) u_jtag (
         .clk(clk_i),
         .rst(rst),
@@ -340,9 +416,9 @@ module TopModule (
         .compare_enable(1'b1),
 
         .tdo(jtag_tdo_i),
-        .use_internal_target(1'b1),
+        .use_internal_target(1'b0),
         .boundary_inputs(boundary_inputs),
-        .boundary_scan_data({JTAG_BOUNDARY_WIDTH{1'b0}}),
+        .boundary_scan_data(8'h00),
         .tck(jtag_tck_o),
         .tms(jtag_tms_o),
         .tdi(jtag_tdi_o),
@@ -419,20 +495,21 @@ module TopModule (
         .status_led_bus(status_led_bus)
     );
 
-    // Front-panel indicators
-    assign led_o[0] = jtag_busy;
-    assign led_o[1] = status_scan_done;
-    assign led_o[2] = status_scan_done && status_match;
-    assign led_o[3] = status_scan_done && !status_match;
-    assign led_o[4] = status_timeout;
-    assign led_o[5] = status_tdo_stuck_low;
-    assign led_o[6] = status_tdo_stuck_high;
-    assign led_o[7] = fifo_full | status_fifo_overflow_latched;
-    assign led_o[11:8] = status_jtag_state;
-    assign led_o[12] = uart_tx_active;
-    assign led_o[13] = boundary_i;
-    assign led_o[14] = boundary_j;
-    assign led_o[15] = boundary_tdo;
+    LedStatus u_led_status (
+        .scan_done(status_scan_done),
+        .id_match(status_match),
+        .fifo_empty(fifo_empty),
+        .fifo_full(fifo_full),
+        .fifo_underflow(status_fifo_underflow_latched),
+        .fifo_overflow(status_fifo_overflow_latched),
+        .uart_busy(uart_tx_active),
+        .jtag_state(status_jtag_state),
+        .jtag_tck(jtag_tck_o),
+        .jtag_tms(jtag_tms_o),
+        .jtag_tdi(jtag_tdi_o),
+        .jtag_tdo(jtag_tdo_i),
+        .led(led_o)
+    );
 
 
     // Seven-segment display
@@ -484,7 +561,7 @@ module TopModule (
     VGA u_vga (
         .clk(clk_i),
         .rst(rst),
-        .idcode(status_idcode),
+        .idcode(seven_seg_value),
         .id_match(status_match),
         .scan_done(status_scan_done),
         .scan_busy(jtag_busy),

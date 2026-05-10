@@ -32,6 +32,9 @@ module StatusReg (
     output wire [15:0] status_led_bus
 );
 
+  localparam [7:0] EVENT_TYPE_IDCODE = 8'h01;
+  localparam [7:0] EVENT_TYPE_TIMEOUT = 8'hEE;
+
   assign status_led_bus = {
     jtag_tdo,
     jtag_tdi,
@@ -68,16 +71,24 @@ module StatusReg (
       end
 
       if (event_valid) begin
-        latest_idcode <= event_word[63:32];
-        id_match <= event_word[31];
-        tdo_stuck_high <= event_word[30];
-        tdo_stuck_low <= event_word[29];
-        timeout_error <= event_word[28];
         jtag_state <= event_word[27:24];
         event_type <= event_word[23:16];
         timestamp <= event_word[15:0];
         scan_done <= 1'b1;
         event_count <= event_count + 1'b1;
+
+        if (event_word[23:16] == EVENT_TYPE_IDCODE) begin
+          latest_idcode <= event_word[63:32];
+          id_match <= event_word[31];
+          tdo_stuck_high <= event_word[30];
+          tdo_stuck_low <= event_word[29];
+          timeout_error <= event_word[28];
+        end else if (event_word[23:16] == EVENT_TYPE_TIMEOUT) begin
+          id_match <= 1'b0;
+          tdo_stuck_high <= event_word[30];
+          tdo_stuck_low <= event_word[29];
+          timeout_error <= event_word[28];
+        end
       end
 
       if (fifo_underflow || fifo_valid) begin

@@ -1,0 +1,410 @@
+entity GW1N_1P5_XXqn48xfuv is
+
+	generic (PHYSICAL_PIN_MAP : string := "qn48xfuv");
+		port (
+                           IOL4A: inout bit;
+                           IOL4B: inout bit;
+                           IOL6A: inout bit;
+                           IOL6B: inout bit;
+                          IOL11A: inout bit;
+                          IOL11B: inout bit;
+                          IOL12B: inout bit;
+                          IOL12A: inout bit;
+                          IOL17B: inout bit;
+                          IOL17A: inout bit;
+                           IOB2B: inout bit;
+                           IOB2A: inout bit;
+                           IOB5B: inout bit;
+                           IOB5A: inout bit;
+                           IOB7B: inout bit;
+                           IOB7A: inout bit;
+                           IOB9B: inout bit;
+                           IOB9A: inout bit;
+                          IOB18A: inout bit;
+                          IOB18B: inout bit;
+                          IOR17B: inout bit;
+                          IOR17A: inout bit;
+                          IOR15B: inout bit;
+                          IOR15A: inout bit;
+                          IOR13B: inout bit;
+                          IOR13A: inout bit;
+                          IOR11B: inout bit;
+                          IOR11A: inout bit;
+                           IOR1B: inout bit;
+                           IOR1A: inout bit;
+                          IOT18A: inout bit;
+                          IOT18B: inout bit;
+                          IOT15B: inout bit;
+                          IOT15A: inout bit;
+                          IOT14B: inout bit;
+                          IOT14A: inout bit;
+                             TMS: in bit;
+                             TCK: in bit;
+                             TDO: out bit;
+                             TDI: in bit;
+                             VCC: linkage bit_vector (1 to 2);
+                          VCCIO0: linkage bit_vector (1 to 2);
+                          VCCIO1: linkage bit_vector (1 to 1);
+                          VCCIO2: linkage bit_vector (1 to 2);
+                          VCCIO3: linkage bit_vector (1 to 1));
+
+-- Version Control
+	 use STD_1149_1_2001.all;	-- 1149.1-2001 attributes
+
+-- Component Conformance Statement
+	 attribute COMPONENT_CONFORMANCE of GW1N_1P5_XXqn48xfuv : entity is "STD_1149_1_2001";
+
+-- Device Package Pin Mapping
+	 attribute PIN_MAP of GW1N_1P5_XXqn48xfuv : entity is PHYSICAL_PIN_MAP;
+
+	 constant qn48xfuv : PIN_MAP_STRING :=
+		"     IOL4A:    2, "&
+		"     IOL4B:    3, "&
+		"     IOL6A:    4, "&
+		"     IOL6B:    5, "&
+		"    IOL11A:    7, "&
+		"    IOL11B:    8, "&
+		"    IOL12B:   10, "&
+		"    IOL12A:    9, "&
+		"    IOL17B:   12, "&
+		"    IOL17A:   11, "&
+		"     IOB2B:   15, "&
+		"     IOB2A:   14, "&
+		"     IOB5B:   17, "&
+		"     IOB5A:   16, "&
+		"     IOB7B:   19, "&
+		"     IOB7A:   18, "&
+		"     IOB9B:   21, "&
+		"     IOB9A:   20, "&
+		"    IOB18A:   23, "&
+		"    IOB18B:   24, "&
+		"    IOR17B:   26, "&
+		"    IOR17A:   27, "&
+		"    IOR15B:   28, "&
+		"    IOR15A:   29, "&
+		"    IOR13B:   31, "&
+		"    IOR13A:   32, "&
+		"    IOR11B:   33, "&
+		"    IOR11A:   34, "&
+		"     IOR1B:   35, "&
+		"     IOR1A:   36, "&
+		"    IOT18A:   38, "&
+		"    IOT18B:   37, "&
+		"    IOT15B:   40, "&
+		"    IOT15A:   41, "&
+		"    IOT14B:   42, "&
+		"    IOT14A:   43, "&
+		"       TMS:   44, "&
+		"       TCK:   45, "&
+		"       TDO:   48, "&
+		"       TDI:   47, "&
+		"       VCC: ( 1,"&
+		"          25),"&
+		"    VCCIO0: ( 39,"&
+		"          46),"&
+		"    VCCIO1: ( 30),"&
+		"    VCCIO2: ( 13,"&
+		"          22),"&
+		"    VCCIO3: ( 6)";
+-- End of pin mapping
+
+-- TAP definition and characteristics
+	 attribute TAP_SCAN_IN   of TDI : signal is true;
+	 attribute TAP_SCAN_MODE of TMS : signal is true;
+	 attribute TAP_SCAN_OUT  of TDO : signal is true;
+	 attribute TAP_SCAN_CLOCK of TCK : signal is (25.0e6, BOTH);
+
+-- Instruction register description
+	 attribute INSTRUCTION_LENGTH of GW1N_1P5_XXqn48xfuv : entity is 8;
+	 attribute INSTRUCTION_OPCODE of GW1N_1P5_XXqn48xfuv : entity is 
+		 "              IDCODE (00010001, " &
+		 "                      00011001), " &
+		 "             PRELOAD (00000001), " &
+		 "              SAMPLE (00000001), " &
+		 "               HIGHZ (00001100), " &
+		 "              BYPASS (00000000, " &
+		 "                      11111111), " &
+		 "            USERCODE (00010011), " &
+		 "              EXTEST (00000100), " &
+		 "               CLAMP (00000111), " &
+		 "PRIVATE	(00010010, 01000100, 00001111, 01000010, " &
+			"01000011, 10000000, 01010000, 00111011, " &
+			"00000110, 00010110, 00011010, 00001101, " &
+			"01000001, 00011000, 00111100, 00010000, " &
+			"00010111,00001110)";
+
+  attribute INSTRUCTION_CAPTURE of GW1N_1P5_XXqn48xfuv : entity is
+					"0001X001";
+  attribute INSTRUCTION_PRIVATE of GW1N_1P5_XXqn48xfuv : entity is
+					"PRIVATE";
+
+--IDCODE and USERCODE register definition
+	 attribute IDCODE_REGISTER of GW1N_1P5_XXqn48xfuv : entity is
+		 "0000" &	--Version number
+		 "0001001000000110" &	--Device specific number
+		 "100000011011";	--Company code
+
+	 attribute USERCODE_REGISTER of GW1N_1P5_XXqn48xfuv : entity is
+		 "00000000000000000000000000000000";
+
+	 attribute REGISTER_ACCESS of GW1N_1P5_XXqn48xfuv : entity is
+		 "BYPASS               (CLAMP, " &
+		 "                      HIGHZ, " &
+		 "                      BYPASS), " &
+		 "DEVICE_ID            (IDCODE, " &
+		 "                      USERCODE), " &
+		 "BOUNDARY             (EXTEST, " &
+		 "                      PRELOAD, " &
+		 "                      SAMPLE) ";
+
+-- *****************************************************************
+-- Boundary Scan Register Description, Cell 0 is the closest to TDO 
+-- *****************************************************************
+	 attribute BOUNDARY_LENGTH of GW1N_1P5_XXqn48xfuv : entity is 244;
+	 attribute BOUNDARY_REGISTER of GW1N_1P5_XXqn48xfuv : entity is
+		 "0 (BC_2, *, control, 1), " &
+		 "1 (BC_7, iol4a, bidir, X, 0, 1, Z), " &
+		 "2 (BC_2, *, control, 1), " &
+		 "3 (BC_7, iol4b, bidir, X, 2, 1, Z), " &
+		 "4 (BC_1, *, internal, X), " &
+		 "5 (BC_1, *, internal, X), " &
+		 "6 (BC_1, *, internal, X), " &
+		 "7 (BC_1, *, internal, X), " &
+		 "8 (BC_2, *, control, 1), " &
+		 "9 (BC_7, iol6a, bidir, X, 8, 1, Z), " &
+		 "10 (BC_2, *, control, 1), " &
+		 "11 (BC_7, iol6b, bidir, X, 10, 1, Z), " &
+		 "12 (BC_1, *, internal, X), " &
+		 "13 (BC_1, *, internal, X), " &
+		 "14 (BC_1, *, internal, X), " &
+		 "15 (BC_1, *, internal, X), " &
+		 "16 (BC_1, *, internal, X), " &
+		 "17 (BC_1, *, internal, X), " &
+		 "18 (BC_1, *, internal, X), " &
+		 "19 (BC_1, *, internal, X), " &
+		 "20 (BC_1, *, internal, X), " &
+		 "21 (BC_1, *, internal, X), " &
+		 "22 (BC_1, *, internal, X), " &
+		 "23 (BC_1, *, internal, X), " &
+		 "24 (BC_2, *, control, 1), " &
+		 "25 (BC_7, iol11a, bidir, X, 24, 1, Z), " &
+		 "26 (BC_2, *, control, 1), " &
+		 "27 (BC_7, iol11b, bidir, X, 26, 1, Z), " &
+		 "28 (BC_2, *, control, 1), " &
+		 "29 (BC_7, iol12a, bidir, X, 28, 1, Z), " &
+		 "30 (BC_2, *, control, 1), " &
+		 "31 (BC_7, iol12b, bidir, X, 30, 1, Z), " &
+		 "32 (BC_1, *, internal, X), " &
+		 "33 (BC_1, *, internal, X), " &
+		 "34 (BC_1, *, internal, X), " &
+		 "35 (BC_1, *, internal, X), " &
+		 "36 (BC_1, *, internal, X), " &
+		 "37 (BC_1, *, internal, X), " &
+		 "38 (BC_1, *, internal, X), " &
+		 "39 (BC_1, *, internal, X), " &
+		 "40 (BC_1, *, internal, X), " &
+		 "41 (BC_1, *, internal, X), " &
+		 "42 (BC_1, *, internal, X), " &
+		 "43 (BC_1, *, internal, X), " &
+		 "44 (BC_1, *, internal, X), " &
+		 "45 (BC_1, *, internal, X), " &
+		 "46 (BC_1, *, internal, X), " &
+		 "47 (BC_1, *, internal, X), " &
+		 "48 (BC_2, *, control, 1), " &
+		 "49 (BC_7, iol17a, bidir, X, 48, 1, Z), " &
+		 "50 (BC_2, *, control, 1), " &
+		 "51 (BC_7, iol17b, bidir, X, 50, 1, Z), " &
+		 "52 (BC_1, *, internal, X), " &
+		 "53 (BC_1, *, internal, X), " &
+		 "54 (BC_1, *, internal, X), " &
+		 "55 (BC_1, *, internal, X), " &
+		 "56 (BC_1, *, internal, X), " &
+		 "57 (BC_1, *, internal, X), " &
+		 "58 (BC_1, *, internal, X), " &
+		 "59 (BC_1, *, internal, X), " &
+		 "60 (BC_2, *, control, 1), " &
+		 "61 (BC_7, iob2a, bidir, X, 60, 1, Z), " &
+		 "62 (BC_2, *, control, 1), " &
+		 "63 (BC_7, iob2b, bidir, X, 62, 1, Z), " &
+		 "64 (BC_1, *, internal, X), " &
+		 "65 (BC_1, *, internal, X), " &
+		 "66 (BC_1, *, internal, X), " &
+		 "67 (BC_1, *, internal, X), " &
+		 "68 (BC_1, *, internal, X), " &
+		 "69 (BC_1, *, internal, X), " &
+		 "70 (BC_1, *, internal, X), " &
+		 "71 (BC_1, *, internal, X), " &
+		 "72 (BC_2, *, control, 1), " &
+		 "73 (BC_7, iob5a, bidir, X, 72, 1, Z), " &
+		 "74 (BC_2, *, control, 1), " &
+		 "75 (BC_7, iob5b, bidir, X, 74, 1, Z), " &
+		 "76 (BC_1, *, internal, X), " &
+		 "77 (BC_1, *, internal, X), " &
+		 "78 (BC_1, *, internal, X), " &
+		 "79 (BC_1, *, internal, X), " &
+		 "80 (BC_2, *, control, 1), " &
+		 "81 (BC_7, iob7a, bidir, X, 80, 1, Z), " &
+		 "82 (BC_2, *, control, 1), " &
+		 "83 (BC_7, iob7b, bidir, X, 82, 1, Z), " &
+		 "84 (BC_1, *, internal, X), " &
+		 "85 (BC_1, *, internal, X), " &
+		 "86 (BC_1, *, internal, X), " &
+		 "87 (BC_1, *, internal, X), " &
+		 "88 (BC_2, *, control, 1), " &
+		 "89 (BC_7, iob9a, bidir, X, 88, 1, Z), " &
+		 "90 (BC_2, *, control, 1), " &
+		 "91 (BC_7, iob9b, bidir, X, 90, 1, Z), " &
+		 "92 (BC_1, *, internal, X), " &
+		 "93 (BC_1, *, internal, X), " &
+		 "94 (BC_1, *, internal, X), " &
+		 "95 (BC_1, *, internal, X), " &
+		 "96 (BC_1, *, internal, X), " &
+		 "97 (BC_1, *, internal, X), " &
+		 "98 (BC_1, *, internal, X), " &
+		 "99 (BC_1, *, internal, X), " &
+		 "100 (BC_1, *, internal, X), " &
+		 "101 (BC_1, *, internal, X), " &
+		 "102 (BC_1, *, internal, X), " &
+		 "103 (BC_1, *, internal, X), " &
+		 "104 (BC_1, *, internal, X), " &
+		 "105 (BC_1, *, internal, X), " &
+		 "106 (BC_1, *, internal, X), " &
+		 "107 (BC_1, *, internal, X), " &
+		 "108 (BC_1, *, internal, X), " &
+		 "109 (BC_1, *, internal, X), " &
+		 "110 (BC_1, *, internal, X), " &
+		 "111 (BC_1, *, internal, X), " &
+		 "112 (BC_1, *, internal, X), " &
+		 "113 (BC_1, *, internal, X), " &
+		 "114 (BC_1, *, internal, X), " &
+		 "115 (BC_1, *, internal, X), " &
+		 "116 (BC_1, *, internal, X), " &
+		 "117 (BC_1, *, internal, X), " &
+		 "118 (BC_1, *, internal, X), " &
+		 "119 (BC_1, *, internal, X), " &
+		 "120 (BC_2, *, control, 1), " &
+		 "121 (BC_7, iob18a, bidir, X, 120, 1, Z), " &
+		 "122 (BC_2, *, control, 1), " &
+		 "123 (BC_7, iob18b, bidir, X, 122, 1, Z), " &
+		 "124 (BC_1, *, internal, X), " &
+		 "125 (BC_1, *, internal, X), " &
+		 "126 (BC_1, *, internal, X), " &
+		 "127 (BC_1, *, internal, X), " &
+		 "128 (BC_1, *, internal, X), " &
+		 "129 (BC_1, *, internal, X), " &
+		 "130 (BC_1, *, internal, X), " &
+		 "131 (BC_1, *, internal, X), " &
+		 "132 (BC_2, *, control, 1), " &
+		 "133 (BC_7, ior17b, bidir, X, 132, 1, Z), " &
+		 "134 (BC_2, *, control, 1), " &
+		 "135 (BC_7, ior17a, bidir, X, 134, 1, Z), " &
+		 "136 (BC_1, *, internal, X), " &
+		 "137 (BC_1, *, internal, X), " &
+		 "138 (BC_1, *, internal, X), " &
+		 "139 (BC_1, *, internal, X), " &
+		 "140 (BC_2, *, control, 1), " &
+		 "141 (BC_7, ior15b, bidir, X, 140, 1, Z), " &
+		 "142 (BC_2, *, control, 1), " &
+		 "143 (BC_7, ior15a, bidir, X, 142, 1, Z), " &
+		 "144 (BC_1, *, internal, X), " &
+		 "145 (BC_1, *, internal, X), " &
+		 "146 (BC_1, *, internal, X), " &
+		 "147 (BC_1, *, internal, X), " &
+		 "148 (BC_2, *, control, 1), " &
+		 "149 (BC_7, ior13b, bidir, X, 148, 1, Z), " &
+		 "150 (BC_2, *, control, 1), " &
+		 "151 (BC_7, ior13a, bidir, X, 150, 1, Z), " &
+		 "152 (BC_1, *, internal, X), " &
+		 "153 (BC_1, *, internal, X), " &
+		 "154 (BC_1, *, internal, X), " &
+		 "155 (BC_1, *, internal, X), " &
+		 "156 (BC_2, *, control, 1), " &
+		 "157 (BC_7, ior11b, bidir, X, 156, 1, Z), " &
+		 "158 (BC_2, *, control, 1), " &
+		 "159 (BC_7, ior11a, bidir, X, 158, 1, Z), " &
+		 "160 (BC_1, *, internal, X), " &
+		 "161 (BC_1, *, internal, X), " &
+		 "162 (BC_1, *, internal, X), " &
+		 "163 (BC_1, *, internal, X), " &
+		 "164 (BC_1, *, internal, X), " &
+		 "165 (BC_1, *, internal, X), " &
+		 "166 (BC_1, *, internal, X), " &
+		 "167 (BC_1, *, internal, X), " &
+		 "168 (BC_1, *, internal, X), " &
+		 "169 (BC_1, *, internal, X), " &
+		 "170 (BC_1, *, internal, X), " &
+		 "171 (BC_1, *, internal, X), " &
+		 "172 (BC_1, *, internal, X), " &
+		 "173 (BC_1, *, internal, X), " &
+		 "174 (BC_1, *, internal, X), " &
+		 "175 (BC_1, *, internal, X), " &
+		 "176 (BC_1, *, internal, X), " &
+		 "177 (BC_1, *, internal, X), " &
+		 "178 (BC_1, *, internal, X), " &
+		 "179 (BC_1, *, internal, X), " &
+		 "180 (BC_2, *, control, 1), " &
+		 "181 (BC_7, ior1b, bidir, X, 180, 1, Z), " &
+		 "182 (BC_2, *, control, 1), " &
+		 "183 (BC_7, ior1a, bidir, X, 182, 1, Z), " &
+		 "184 (BC_1, *, internal, X), " &
+		 "185 (BC_1, *, internal, X), " &
+		 "186 (BC_1, *, internal, X), " &
+		 "187 (BC_1, *, internal, X), " &
+		 "188 (BC_2, *, control, 1), " &
+		 "189 (BC_7, iot18b, bidir, X, 188, 1, Z), " &
+		 "190 (BC_2, *, control, 1), " &
+		 "191 (BC_7, iot18a, bidir, X, 190, 1, Z), " &
+		 "192 (BC_1, *, internal, X), " &
+		 "193 (BC_1, *, internal, X), " &
+		 "194 (BC_1, *, internal, X), " &
+		 "195 (BC_1, *, internal, X), " &
+		 "196 (BC_1, *, internal, X), " &
+		 "197 (BC_1, *, internal, X), " &
+		 "198 (BC_1, *, internal, X), " &
+		 "199 (BC_1, *, internal, X), " &
+		 "200 (BC_2, *, control, 1), " &
+		 "201 (BC_7, iot15b, bidir, X, 200, 1, Z), " &
+		 "202 (BC_2, *, control, 1), " &
+		 "203 (BC_7, iot15a, bidir, X, 202, 1, Z), " &
+		 "204 (BC_2, *, control, 1), " &
+		 "205 (BC_7, iot14b, bidir, X, 204, 1, Z), " &
+		 "206 (BC_2, *, control, 1), " &
+		 "207 (BC_7, iot14a, bidir, X, 206, 1, Z), " &
+		 "208 (BC_1, *, internal, X), " &
+		 "209 (BC_1, *, internal, X), " &
+		 "210 (BC_1, *, internal, X), " &
+		 "211 (BC_1, *, internal, X), " &
+		 "212 (BC_1, *, internal, X), " &
+		 "213 (BC_1, *, internal, X), " &
+		 "214 (BC_1, *, internal, X), " &
+		 "215 (BC_1, *, internal, X), " &
+		 "216 (BC_1, *, internal, X), " &
+		 "217 (BC_1, *, internal, X), " &
+		 "218 (BC_1, *, internal, X), " &
+		 "219 (BC_1, *, internal, X), " &
+		 "220 (BC_1, *, internal, X), " &
+		 "221 (BC_1, *, internal, X), " &
+		 "222 (BC_1, *, internal, X), " &
+		 "223 (BC_1, *, internal, X), " &
+		 "224 (BC_1, *, internal, X), " &
+		 "225 (BC_1, *, internal, X), " &
+		 "226 (BC_1, *, internal, X), " &
+		 "227 (BC_1, *, internal, X), " &
+		 "228 (BC_1, *, internal, X), " &
+		 "229 (BC_1, *, internal, X), " &
+		 "230 (BC_1, *, internal, X), " &
+		 "231 (BC_1, *, internal, X), " &
+		 "232 (BC_1, *, internal, X), " &
+		 "233 (BC_1, *, internal, X), " &
+		 "234 (BC_1, *, internal, X), " &
+		 "235 (BC_1, *, internal, X), " &
+		 "236 (BC_1, *, internal, X), " &
+		 "237 (BC_1, *, internal, X), " &
+		 "238 (BC_1, *, internal, X), " &
+		 "239 (BC_1, *, internal, X), " &
+		 "240 (BC_1, *, internal, X), " &
+		 "241 (BC_1, *, internal, X), " &
+		 "242 (BC_1, *, internal, X), " &
+		 "243 (BC_1, *, internal, X)";
+
+end GW1N_1P5_XXqn48xfuv;

@@ -74,6 +74,31 @@ task automatic tb_test_topmodule;
     release dut.uart_char_index;
     release dut.uart_event_idcode;
     release dut.uart_event_match;
+
+    force dut.fifo_valid = 1'b1;
+    force dut.fifo_dout = {
+      8'h02,
+      8'h01,
+      8'h00,
+      8'h00,
+      1'b1,
+      1'b0,
+      1'b0,
+      1'b0,
+      `TB_JTAG_FINAL_STATE,
+      `TB_JTAG_EVENT_TYPE_BOUNDARY_PIN,
+      16'h1234
+    };
+    force dut.jtag_busy = 1'b0;
+
+    @(posedge tb_clk);
+    #1;
+    tb_expect_equal32(dut.seven_seg_value, 32'h0201_0001,
+                      "TopModule boundary FIFO display word");
+
+    release dut.fifo_valid;
+    release dut.fifo_dout;
+    release dut.jtag_busy;
   end
 endtask
 

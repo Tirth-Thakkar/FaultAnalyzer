@@ -23,9 +23,10 @@ module BinaryDecimalConv #(
     assign shift_stage[0] = {BCD_WIDTH{1'b0}};
 
     generate
-        for (bit_index = 0; bit_index < WIDTH; bit_index = bit_index + 1) begin : DOUBLE_DABBLE_BIT
+        for (bit_index = 0; bit_index < WIDTH; bit_index = bit_index + 1) begin : gen_DABBLE_BIT
 
-            for (digit_index = 0; digit_index < BCD_DIGITS; digit_index = digit_index + 1) begin : DOUBLE_DABBLE_DIGIT
+            for (digit_index = 0; digit_index < BCD_DIGITS;
+                 digit_index = digit_index + 1) begin : gen_DABBLE_DIG
 
                 BcdAdd3Gate u_bcd_add3_gate (
                     .bcd_in  (shift_stage[bit_index][(digit_index*4)+3 : digit_index*4]),

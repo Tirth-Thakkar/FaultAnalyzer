@@ -7,8 +7,12 @@ task automatic tb_test_jtag;
 
     tb_expect_equal32(dut.u_jtag.TCK_HALF_DIVIDER, `TB_JTAG_TCK_HALF_DIVIDER,
                       "JTAG TCK half divider");
-    tb_expect_equal32({30'h0, dut.u_jtag.BOUNDARY_OPCODE}, 32'h0000_0001,
+    tb_expect_equal32({24'h0, dut.u_jtag.BOUNDARY_OPCODE}, 32'h0000_0001,
                       "JTAG SAMPLE/PRELOAD opcode");
+    tb_expect_equal32(dut.u_jtag.BOUNDARY_REGISTER_BITS, `TB_JTAG_BOUNDARY_BITS,
+                      "JTAG BSDL boundary register length");
+    tb_expect_equal32(dut.u_jtag.BOUNDARY_PIN_COUNT, `TB_JTAG_BOUNDARY_PIN_COUNT,
+                      "JTAG BSDL pin event count");
     tb_expect_equal32({24'h0, dut.u_jtag.EXPECTED_BOUNDARY_DATA}, 32'h0000_0000,
                       "JTAG expected boundary data");
 

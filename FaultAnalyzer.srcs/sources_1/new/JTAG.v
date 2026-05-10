@@ -3,9 +3,13 @@
 module JTAG #(
     parameter integer CLK_FREQ_HZ = 100_000_000,
     parameter integer TCK_HZ = 2_000_000,
+    parameter [31:0] EXPECTED_IDCODE = 32'h0120_681B,
+    parameter [7:0] IDCODE_OPCODE = 8'h11,
+    parameter [7:0] BOUNDARY_OPCODE = 8'h01,
+    parameter integer BOUNDARY_REGISTER_BITS = 244,
+    parameter integer BOUNDARY_PIN_COUNT = 36,
     parameter integer BOUNDARY_WIDTH = 6,
     parameter [BOUNDARY_WIDTH-1:0] EXPECTED_BOUNDARY_DATA = {BOUNDARY_WIDTH{1'b0}},
-    parameter [1:0] BOUNDARY_OPCODE = 2'b01,
     parameter integer TIMEOUT_CYCLES = 1_000_000
 ) (
     input wire clk,
@@ -47,20 +51,25 @@ module JTAG #(
     // TAP scan dimensions
     localparam integer TAP_RESET_TCKS = 5;
     localparam integer POST_IR_IDLE_TCKS = 3;
-    localparam integer IR_BIT_COUNT = 2;
-    localparam integer DR_BOUNDARY_BIT_COUNT = BOUNDARY_WIDTH;
+    localparam integer IR_BIT_COUNT = 8;
+    localparam integer DR_IDCODE_BIT_COUNT = 32;
+    localparam integer SHIFT_COUNTER_WIDTH = 9;
 
-    localparam [5:0] IR_LAST_BIT_INDEX = IR_BIT_COUNT - 1;
-    localparam [5:0] IR_NEXT_TO_LAST_BIT_INDEX = IR_BIT_COUNT - 2;
-    localparam [5:0] DR_LAST_BIT_INDEX = DR_BOUNDARY_BIT_COUNT - 1;
-    localparam [5:0] DR_NEXT_TO_LAST_BIT_INDEX = DR_BOUNDARY_BIT_COUNT - 2;
+    localparam [SHIFT_COUNTER_WIDTH-1:0] IR_LAST_BIT_INDEX = IR_BIT_COUNT - 1;
+    localparam [SHIFT_COUNTER_WIDTH-1:0] IR_NEXT_TO_LAST_BIT_INDEX = IR_BIT_COUNT - 2;
+    localparam [SHIFT_COUNTER_WIDTH-1:0] IDCODE_LAST_BIT_INDEX = DR_IDCODE_BIT_COUNT - 1;
+    localparam [SHIFT_COUNTER_WIDTH-1:0] BOUNDARY_LAST_BIT_INDEX = BOUNDARY_REGISTER_BITS - 1;
+    localparam [5:0] BOUNDARY_PIN_LAST_INDEX = BOUNDARY_PIN_COUNT - 1;
 
     localparam [3:0] RESET_LAST_COUNT = TAP_RESET_TCKS - 1;
     localparam [1:0] POST_IR_IDLE_LAST_COUNT = POST_IR_IDLE_TCKS - 1;
 
+    localparam PHASE_IDCODE = 1'b0;
+    localparam PHASE_BOUNDARY = 1'b1;
 
     // Event encoding
-    localparam [7:0] EVENT_TYPE_BOUNDARY = 8'h02;
+    localparam [7:0] EVENT_TYPE_IDCODE = 8'h01;
+    localparam [7:0] EVENT_TYPE_BOUNDARY_PIN = 8'h02;
     localparam [7:0] EVENT_TYPE_TIMEOUT = 8'hEE;
 
     // JTAG TAP sequencing states
@@ -86,13 +95,17 @@ module JTAG #(
     reg [TCK_DIVIDER_WIDTH-1:0] tck_divider_count;
     reg tck_reg;
     reg start_d;
-    reg [5:0] shift_count;
+    reg [SHIFT_COUNTER_WIDTH-1:0] shift_count;
     reg [3:0] reset_count;
     reg [1:0] idle_count;
     reg tdo_seen_one;
     reg tdo_seen_all_one;
     reg [15:0] timestamp;
     reg [31:0] watchdog_count;
+    reg scan_phase;
+    reg boundary_emit_active;
+    reg [5:0] boundary_emit_index;
+    reg [BOUNDARY_REGISTER_BITS-1:0] captured_boundary_register;
     wire [31:0] boundary_status_word;
 
 
@@ -107,14 +120,166 @@ module JTAG #(
     wire tck_falling_edge;
     wire effective_match;
     wire selected_tdo;
+    wire [7:0] active_ir_opcode;
+    wire [SHIFT_COUNTER_WIDTH-1:0] dr_last_bit_index;
+    wire [SHIFT_COUNTER_WIDTH-1:0] dr_next_to_last_bit_index;
+    wire [7:0] boundary_emit_pin_number;
+    wire [7:0] boundary_emit_data_cell;
+    wire [7:0] boundary_emit_control_cell;
+    wire boundary_emit_sample;
+    wire boundary_emit_control;
 
-    assign boundary_status_word = {{(32-BOUNDARY_WIDTH){1'b0}}, captured_boundary};
+    assign boundary_status_word = captured_idcode;
     assign tck = tck_reg;
     assign tck_half_tick = (tck_divider_count == (TCK_HALF_DIVIDER - 1));
     assign tck_rising_edge = tck_half_tick && !tck_reg;
     assign tck_falling_edge = tck_half_tick && tck_reg;
-    assign effective_match = compare_enable ? (captured_boundary == EXPECTED_BOUNDARY_DATA) : 1'b1;
+    assign effective_match = compare_enable ? (captured_idcode == EXPECTED_IDCODE) : 1'b1;
     assign selected_tdo = use_internal_target ? boundary_tdo : tdo;
+    assign active_ir_opcode = scan_phase == PHASE_BOUNDARY ? BOUNDARY_OPCODE : IDCODE_OPCODE;
+    assign dr_last_bit_index = scan_phase == PHASE_BOUNDARY ?
+        BOUNDARY_LAST_BIT_INDEX : IDCODE_LAST_BIT_INDEX;
+    assign dr_next_to_last_bit_index = dr_last_bit_index - 1'b1;
+    assign boundary_emit_pin_number = bsdl_pin_number(boundary_emit_index);
+    assign boundary_emit_data_cell = bsdl_data_cell(boundary_emit_index);
+    assign boundary_emit_control_cell = bsdl_control_cell(boundary_emit_index);
+    assign boundary_emit_sample = captured_boundary_register[boundary_emit_data_cell];
+    assign boundary_emit_control = captured_boundary_register[boundary_emit_control_cell];
+
+    function [7:0] bsdl_pin_number;
+        input [5:0] pin_index;
+        begin
+            case (pin_index)
+                6'd0: bsdl_pin_number = 8'd2;
+                6'd1: bsdl_pin_number = 8'd3;
+                6'd2: bsdl_pin_number = 8'd4;
+                6'd3: bsdl_pin_number = 8'd5;
+                6'd4: bsdl_pin_number = 8'd7;
+                6'd5: bsdl_pin_number = 8'd8;
+                6'd6: bsdl_pin_number = 8'd9;
+                6'd7: bsdl_pin_number = 8'd10;
+                6'd8: bsdl_pin_number = 8'd11;
+                6'd9: bsdl_pin_number = 8'd12;
+                6'd10: bsdl_pin_number = 8'd14;
+                6'd11: bsdl_pin_number = 8'd15;
+                6'd12: bsdl_pin_number = 8'd16;
+                6'd13: bsdl_pin_number = 8'd17;
+                6'd14: bsdl_pin_number = 8'd18;
+                6'd15: bsdl_pin_number = 8'd19;
+                6'd16: bsdl_pin_number = 8'd20;
+                6'd17: bsdl_pin_number = 8'd21;
+                6'd18: bsdl_pin_number = 8'd23;
+                6'd19: bsdl_pin_number = 8'd24;
+                6'd20: bsdl_pin_number = 8'd26;
+                6'd21: bsdl_pin_number = 8'd27;
+                6'd22: bsdl_pin_number = 8'd28;
+                6'd23: bsdl_pin_number = 8'd29;
+                6'd24: bsdl_pin_number = 8'd31;
+                6'd25: bsdl_pin_number = 8'd32;
+                6'd26: bsdl_pin_number = 8'd33;
+                6'd27: bsdl_pin_number = 8'd34;
+                6'd28: bsdl_pin_number = 8'd35;
+                6'd29: bsdl_pin_number = 8'd36;
+                6'd30: bsdl_pin_number = 8'd37;
+                6'd31: bsdl_pin_number = 8'd38;
+                6'd32: bsdl_pin_number = 8'd40;
+                6'd33: bsdl_pin_number = 8'd41;
+                6'd34: bsdl_pin_number = 8'd42;
+                6'd35: bsdl_pin_number = 8'd43;
+                default: bsdl_pin_number = 8'd0;
+            endcase
+        end
+    endfunction
+
+    function [7:0] bsdl_data_cell;
+        input [5:0] pin_index;
+        begin
+            case (pin_index)
+                6'd0: bsdl_data_cell = 8'd1;
+                6'd1: bsdl_data_cell = 8'd3;
+                6'd2: bsdl_data_cell = 8'd9;
+                6'd3: bsdl_data_cell = 8'd11;
+                6'd4: bsdl_data_cell = 8'd25;
+                6'd5: bsdl_data_cell = 8'd27;
+                6'd6: bsdl_data_cell = 8'd29;
+                6'd7: bsdl_data_cell = 8'd31;
+                6'd8: bsdl_data_cell = 8'd49;
+                6'd9: bsdl_data_cell = 8'd51;
+                6'd10: bsdl_data_cell = 8'd61;
+                6'd11: bsdl_data_cell = 8'd63;
+                6'd12: bsdl_data_cell = 8'd73;
+                6'd13: bsdl_data_cell = 8'd75;
+                6'd14: bsdl_data_cell = 8'd81;
+                6'd15: bsdl_data_cell = 8'd83;
+                6'd16: bsdl_data_cell = 8'd89;
+                6'd17: bsdl_data_cell = 8'd91;
+                6'd18: bsdl_data_cell = 8'd121;
+                6'd19: bsdl_data_cell = 8'd123;
+                6'd20: bsdl_data_cell = 8'd133;
+                6'd21: bsdl_data_cell = 8'd135;
+                6'd22: bsdl_data_cell = 8'd141;
+                6'd23: bsdl_data_cell = 8'd143;
+                6'd24: bsdl_data_cell = 8'd149;
+                6'd25: bsdl_data_cell = 8'd151;
+                6'd26: bsdl_data_cell = 8'd157;
+                6'd27: bsdl_data_cell = 8'd159;
+                6'd28: bsdl_data_cell = 8'd181;
+                6'd29: bsdl_data_cell = 8'd183;
+                6'd30: bsdl_data_cell = 8'd189;
+                6'd31: bsdl_data_cell = 8'd191;
+                6'd32: bsdl_data_cell = 8'd201;
+                6'd33: bsdl_data_cell = 8'd203;
+                6'd34: bsdl_data_cell = 8'd205;
+                6'd35: bsdl_data_cell = 8'd207;
+                default: bsdl_data_cell = 8'd0;
+            endcase
+        end
+    endfunction
+
+    function [7:0] bsdl_control_cell;
+        input [5:0] pin_index;
+        begin
+            case (pin_index)
+                6'd0: bsdl_control_cell = 8'd0;
+                6'd1: bsdl_control_cell = 8'd2;
+                6'd2: bsdl_control_cell = 8'd8;
+                6'd3: bsdl_control_cell = 8'd10;
+                6'd4: bsdl_control_cell = 8'd24;
+                6'd5: bsdl_control_cell = 8'd26;
+                6'd6: bsdl_control_cell = 8'd28;
+                6'd7: bsdl_control_cell = 8'd30;
+                6'd8: bsdl_control_cell = 8'd48;
+                6'd9: bsdl_control_cell = 8'd50;
+                6'd10: bsdl_control_cell = 8'd60;
+                6'd11: bsdl_control_cell = 8'd62;
+                6'd12: bsdl_control_cell = 8'd72;
+                6'd13: bsdl_control_cell = 8'd74;
+                6'd14: bsdl_control_cell = 8'd80;
+                6'd15: bsdl_control_cell = 8'd82;
+                6'd16: bsdl_control_cell = 8'd88;
+                6'd17: bsdl_control_cell = 8'd90;
+                6'd18: bsdl_control_cell = 8'd120;
+                6'd19: bsdl_control_cell = 8'd122;
+                6'd20: bsdl_control_cell = 8'd132;
+                6'd21: bsdl_control_cell = 8'd134;
+                6'd22: bsdl_control_cell = 8'd140;
+                6'd23: bsdl_control_cell = 8'd142;
+                6'd24: bsdl_control_cell = 8'd148;
+                6'd25: bsdl_control_cell = 8'd150;
+                6'd26: bsdl_control_cell = 8'd156;
+                6'd27: bsdl_control_cell = 8'd158;
+                6'd28: bsdl_control_cell = 8'd180;
+                6'd29: bsdl_control_cell = 8'd182;
+                6'd30: bsdl_control_cell = 8'd188;
+                6'd31: bsdl_control_cell = 8'd190;
+                6'd32: bsdl_control_cell = 8'd200;
+                6'd33: bsdl_control_cell = 8'd202;
+                6'd34: bsdl_control_cell = 8'd204;
+                6'd35: bsdl_control_cell = 8'd206;
+                default: bsdl_control_cell = 8'd0;
+            endcase
+        end
+    endfunction
 
     JTAG_READY_IC u_known_boundary_target (
         .TDI(tdi),
@@ -148,13 +313,17 @@ module JTAG #(
             tck_divider_count <= {TCK_DIVIDER_WIDTH{1'b0}};
             tck_reg <= 1'b0;
             start_d <= 1'b0;
-            shift_count <= 6'd0;
+            shift_count <= {SHIFT_COUNTER_WIDTH{1'b0}};
             reset_count <= 4'd0;
             idle_count <= 2'd0;
             tdo_seen_one <= 1'b0;
             tdo_seen_all_one <= 1'b1;
             timestamp <= 16'd0;
             watchdog_count <= 32'd0;
+            scan_phase <= PHASE_IDCODE;
+            boundary_emit_active <= 1'b0;
+            boundary_emit_index <= 6'd0;
+            captured_boundary_register <= {BOUNDARY_REGISTER_BITS{1'b0}};
             tms <= 1'b1;
             tdi <= 1'b0;
             busy <= 1'b0;
@@ -174,10 +343,12 @@ module JTAG #(
             timestamp <= timestamp + 1'b1;
             jtag_state <= state;
 
-            if (!busy) begin
+            if (!busy || boundary_emit_active) begin
                 tck_reg <= 1'b0;
                 tck_divider_count <= {TCK_DIVIDER_WIDTH{1'b0}};
-                watchdog_count <= 32'd0;
+                if (!busy) begin
+                    watchdog_count <= 32'd0;
+                end
             end else if (tck_half_tick) begin
                 tck_divider_count <= {TCK_DIVIDER_WIDTH{1'b0}};
                 tck_reg <= ~tck_reg;
@@ -186,10 +357,41 @@ module JTAG #(
                 tck_divider_count <= tck_divider_count + 1'b1;
             end
 
-            if (busy && watchdog_count >= TIMEOUT_CYCLES) begin
+            if (boundary_emit_active) begin
+                tms <= 1'b0;
+                tdi <= 1'b0;
+                event_word <= {
+                    boundary_emit_pin_number,
+                    boundary_emit_data_cell,
+                    boundary_emit_control_cell,
+                    {2'b00, boundary_emit_index},
+                    boundary_emit_sample,
+                    boundary_emit_control,
+                    1'b0,
+                    1'b0,
+                    ST_FINISH,
+                    EVENT_TYPE_BOUNDARY_PIN,
+                    timestamp
+                };
+                event_valid <= 1'b1;
+
+                if (boundary_emit_index == BOUNDARY_PIN_LAST_INDEX) begin
+                    boundary_emit_active <= 1'b0;
+                    boundary_emit_index <= 6'd0;
+                    state <= ST_IDLE;
+                    busy <= 1'b0;
+                    done <= 1'b1;
+                    captured_boundary <= captured_boundary_register[BOUNDARY_WIDTH-1:0];
+                end else begin
+                    boundary_emit_index <= boundary_emit_index + 1'b1;
+                end
+            end else if (busy && watchdog_count >= TIMEOUT_CYCLES) begin
                 state <= ST_IDLE;
                 busy <= 1'b0;
                 done <= 1'b1;
+                scan_phase <= PHASE_IDCODE;
+                boundary_emit_active <= 1'b0;
+                boundary_emit_index <= 6'd0;
                 timeout_error <= 1'b1;
                 id_match <= 1'b0;
                 captured_idcode <= boundary_status_word;
@@ -212,10 +414,14 @@ module JTAG #(
                     state <= ST_RESET;
                     busy <= 1'b1;
                     reset_count <= 4'd0;
-                    shift_count <= 6'd0;
+                    shift_count <= {SHIFT_COUNTER_WIDTH{1'b0}};
                     idle_count <= 2'd0;
+                    scan_phase <= PHASE_IDCODE;
+                    boundary_emit_active <= 1'b0;
+                    boundary_emit_index <= 6'd0;
                     captured_idcode <= 32'd0;
                     captured_boundary <= {BOUNDARY_WIDTH{1'b0}};
+                    captured_boundary_register <= {BOUNDARY_REGISTER_BITS{1'b0}};
                     tdo_seen_one <= 1'b0;
                     tdo_seen_all_one <= 1'b1;
                     tdo_stuck_high <= 1'b0;
@@ -225,7 +431,12 @@ module JTAG #(
                 end
             end else begin
                 if (tck_rising_edge && state == ST_DR_SHIFT) begin
-                    captured_boundary[shift_count] <= tdo_sync;
+                    if (scan_phase == PHASE_BOUNDARY) begin
+                        captured_boundary_register[shift_count] <= tdo_sync;
+                    end else begin
+                        captured_idcode[shift_count] <= tdo_sync;
+                    end
+
                     tdo_seen_one <= tdo_seen_one | tdo_sync;
                     tdo_seen_all_one <= tdo_seen_all_one & tdo_sync;
                 end
@@ -262,8 +473,8 @@ module JTAG #(
 
                         ST_IR_CAPTURE: begin
                             state <= ST_IR_SHIFT;
-                            shift_count <= 6'd0;
-                            tdi <= BOUNDARY_OPCODE[0];
+                            shift_count <= {SHIFT_COUNTER_WIDTH{1'b0}};
+                            tdi <= active_ir_opcode[0];
                             tms <= 1'b0;
                         end
 
@@ -274,7 +485,7 @@ module JTAG #(
                                 tdi <= 1'b0;
                             end else begin
                                 shift_count <= shift_count + 1'b1;
-                                tdi <= BOUNDARY_OPCODE[shift_count+1'b1];
+                                tdi <= active_ir_opcode[shift_count+1'b1];
                                 tms <= (shift_count == IR_NEXT_TO_LAST_BIT_INDEX);
                             end
                         end
@@ -308,22 +519,22 @@ module JTAG #(
 
                         ST_DR_CAPTURE: begin
                             state <= ST_DR_SHIFT;
-                            shift_count <= 6'd0;
-                            tdi <= boundary_scan_data[0];
+                            shift_count <= {SHIFT_COUNTER_WIDTH{1'b0}};
+                            tdi <= 1'b0;
                             tms <= 1'b0;
                             tdo_seen_one <= 1'b0;
                             tdo_seen_all_one <= 1'b1;
                         end
 
                         ST_DR_SHIFT: begin
-                            if (shift_count == DR_LAST_BIT_INDEX) begin
+                            if (shift_count == dr_last_bit_index) begin
                                 state <= ST_DR_EXIT1;
                                 tms <= 1'b1;
                                 tdi <= 1'b0;
                             end else begin
                                 shift_count <= shift_count + 1'b1;
-                                tdi <= boundary_scan_data[shift_count+1'b1];
-                                tms <= (shift_count == DR_NEXT_TO_LAST_BIT_INDEX);
+                                tdi <= 1'b0;
+                                tms <= (shift_count == dr_next_to_last_bit_index);
                             end
                         end
 
@@ -338,25 +549,34 @@ module JTAG #(
                         end
 
                         ST_FINISH: begin
-                            state <= ST_IDLE;
-                            busy <= 1'b0;
-                            done <= 1'b1;
-                            captured_idcode <= boundary_status_word;
-                            id_match <= effective_match;
-                            tdo_stuck_high <= tdo_seen_all_one;
-                            tdo_stuck_low <= ~tdo_seen_one;
-                            timeout_error <= 1'b0;
-                            event_word <= {
-                                boundary_status_word,
-                                effective_match,
-                                tdo_seen_all_one,
-                                ~tdo_seen_one,
-                                1'b0,
-                                ST_FINISH,
-                                EVENT_TYPE_BOUNDARY,
-                                timestamp
-                            };
-                            event_valid <= 1'b1;
+                            if (scan_phase == PHASE_IDCODE) begin
+                                scan_phase <= PHASE_BOUNDARY;
+                                state <= ST_RUN_IDLE;
+                                captured_idcode <= boundary_status_word;
+                                id_match <= effective_match;
+                                tdo_stuck_high <= tdo_seen_all_one;
+                                tdo_stuck_low <= ~tdo_seen_one;
+                                timeout_error <= 1'b0;
+                                event_word <= {
+                                    boundary_status_word,
+                                    effective_match,
+                                    tdo_seen_all_one,
+                                    ~tdo_seen_one,
+                                    1'b0,
+                                    ST_FINISH,
+                                    EVENT_TYPE_IDCODE,
+                                    timestamp
+                                };
+                                event_valid <= 1'b1;
+                            end else begin
+                                state <= ST_FINISH;
+                                boundary_emit_active <= 1'b1;
+                                boundary_emit_index <= 6'd0;
+                                scan_phase <= PHASE_IDCODE;
+                                tdo_stuck_high <= tdo_seen_all_one;
+                                tdo_stuck_low <= ~tdo_seen_one;
+                                timeout_error <= 1'b0;
+                            end
                         end
 
                         default: begin

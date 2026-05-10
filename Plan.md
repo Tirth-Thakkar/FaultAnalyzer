@@ -5,15 +5,15 @@
 FaultAnalyzer is a Vivado project for the Digilent Nexys A7-100T that uses the
 Nexys FPGA as an external JTAG master for a Gowin KIWI 1P5QN48XF target board.
 The project scope is a safe diagnostic path: reset the target TAP, shift the
-Gowin Read ID instruction, capture the 32-bit IDCODE, record one 64-bit event
-in the generated FIFO IP, and report the result through status logic, LEDs,
-UART, and VGA.
+Gowin Read ID instruction, capture the 32-bit IDCODE, then shift the Gowin
+SAMPLE/PRELOAD boundary register and buffer the BSDL package-pin samples in the
+generated FIFO IP.
 
 This project does not implement target bitstream loading, embedded Flash
-programming, or BSDL-driven pin interconnect tests. It uses the IEEE 1149.1
-TAP and boundary-scan architecture for a meaningful, non-destructive IDCODE
-scan that exercises TCK, TMS, TDI, TDO, IR shifting, DR shifting, and result
-checking.
+programming, or EXTEST pin driving. It uses the IEEE 1149.1 TAP and
+boundary-scan architecture for a non-destructive IDCODE plus SAMPLE scan that
+exercises TCK, TMS, TDI, TDO, IR shifting, DR shifting, ID checking, and BSDL pin
+sample capture.
 
 ## Validated Hardware Facts
 
@@ -70,7 +70,7 @@ used directly by the top-level design.
 | Module or IP | Responsibility |
 | --- | --- |
 | `TopModule.v` | Structural top level. Owns board I/O, instantiates project modules, directly instantiates `fifo_event_buffer`, and wires status paths. |
-| `JTAG.v` | Generates TCK, controls the TAP FSM, shifts the `8'h11` Read ID instruction, captures the 32-bit IDCODE, compares it, and emits a 64-bit event word. |
+| `JTAG.v` | Generates TCK, controls the TAP FSM, shifts `8'h11` for IDCODE, shifts `8'h01` for SAMPLE/PRELOAD, captures the 244-bit boundary register, and emits FIFO events for the 36 BSDL package pins. |
 | `StatusReg.v` | Stores the latest event fields, scan-done state, match/mismatch state, FIFO state, and local error flags. |
 | `UartTx.v` | Sends a compact UART diagnostic report from status fields at 115200 baud. |
 | `VGA.v` | Generates VGA timing and displays scan status, IDCODE, pass/fail, and FIFO state. |
@@ -90,7 +90,10 @@ The required diagnostic flow is:
 7. Move to Shift-DR and clock 32 bits from TDO.
 8. Assert TMS with the final DR bit to exit Shift-DR, update DR, and return to Run-Test/Idle.
 9. Compare the captured value against `32'h0120_681B`.
-10. Write one FIFO event and update status outputs.
+10. Write one IDCODE FIFO event.
+11. Shift `8'h01` LSB-first into IR for SAMPLE/PRELOAD.
+12. Move to Shift-DR and clock the 244-bit BSDL boundary register.
+13. Emit one FIFO event for each of the 36 package I/O pins listed by the BSDL.
 
 Recommended hardware TCK is 2 MHz from the 100 MHz system clock. This is below
 the Gowin JTAG timing limit and is slow enough for bring-up with external
@@ -146,6 +149,17 @@ The FIFO event word is:
 | 23:16 | Event type |
 | 15:0 | Timestamp |
 
+For boundary-pin events, `event_type` is `8'h02` and the upper data field is:
+
+| Bits | Field |
+| ---: | --- |
+| 63:56 | Physical package pin number |
+| 55:48 | BSDL data-cell index |
+| 47:40 | BSDL control-cell index |
+| 39:32 | Pin-event ordinal, 0 through 35 |
+| 31 | Captured pin/sample value |
+| 30 | Captured control value |
+
 If overflow reporting is needed, implement it in project logic as
 `event_wr_en && fifo_full`; do not connect an `overflow` output to the current
 IP.
@@ -183,15 +197,15 @@ After the board is programmed, the Kiwi switch is set for external JTAG, and
 the target is wired correctly, the design waits for a scan request. While the
 system is idle, the seven-segment display shows the expected Gowin IDCODE
 `32'h0120_681B`. When BTNC is pressed or SW0 is asserted, the JTAG engine runs
-one IDCODE scan, records one 64-bit event in the FIFO, and updates the status
-logic.
+one IDCODE scan followed by one SAMPLE boundary scan, records one IDCODE event
+and 36 package-pin events in the FIFO, and updates the status logic.
 
 A successful scan should produce these outputs:
 
 | Output | Expected behavior |
 | --- | --- |
 | `led_o` | Pass and status indication through `LedStatus`, including scan state, IDCODE match, FIFO status, and JTAG state. |
-| `seg_o` / `an_o` | The captured IDCODE after `scan_done` is asserted. While idle, the display shows the expected IDCODE. |
+| `seg_o` / `an_o` | The captured IDCODE after `scan_done` is asserted. After BTNU/SW14 reads a boundary FIFO event, the display shows `PPCCOO0F`: package pin, boundary data cell, pin ordinal, and control/value flags. |
 | `dp_o` | Held inactive in the current top-level. |
 | `uart_txd_o` | A single UART line in the form `P ID=0120681B\r\n` for a pass, or `F ID=<captured>\r\n` for a failure. |
 | `vga_red_o` / `vga_green_o` / `vga_blue_o` / `vga_hs_o` / `vga_vs_o` | A VGA status screen showing the scan result, IDCODE, and FIFO/JTAG state. |
@@ -205,11 +219,11 @@ and the recorded error flags instead of pass status.
 | --- | --- | --- |
 | `clk_i` | 100 MHz master clock. | Feeds the synchronizers, JTAG engine, FIFO, status logic, UART timing, and VGA timing. |
 | `sw_i[0]` | Starts one IDCODE scan. | Same function as BTNC. |
-| `sw_i[14]` | Reads one queued FIFO event. | Only advances the FIFO when it is not empty. |
+| `sw_i[14]` | Reads one queued FIFO event onto the display. | Same function as BTNU; only advances the FIFO when it is not empty. |
 | `sw_i[1:13]` and `sw_i[15]` | Reserved in the current top-level. | Synchronized but not used by the present design. |
 | `btnc_i` | Starts one IDCODE scan. | Same function as SW0. |
 | `btnd_i` | Resets the analyzer. | Clears the synchronized control state and downstream status logic. |
-| `btnu_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
+| `btnu_i` | Reads one queued FIFO event onto the display. | Same function as SW14. |
 | `btnl_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
 | `btnr_i` | Reserved in the current top-level. | Synchronized but not consumed by current logic. |
 | `jtag_tdo_i` | Samples the target board TDO line. | Input from the Kiwi target during the JTAG scan. |
@@ -289,8 +303,11 @@ Required scenarios:
 | `JTAG_TCK_DIVIDER` | `25` | Half-period divider for 2 MHz TCK from 100 MHz |
 | `EXPECTED_GOWIN_IDCODE` | `32'h0120_681B` | Expected target IDCODE |
 | `JTAG_IDCODE_OPCODE` | `8'h11` | Gowin Read ID instruction |
+| `JTAG_SAMPLE_OPCODE` | `8'h01` | Gowin SAMPLE/PRELOAD instruction |
 | `JTAG_IR_BITS` | `8` | Gowin GW1N instruction register length |
 | `JTAG_IDCODE_BITS` | `32` | IDCODE data register length |
+| `JTAG_BOUNDARY_BITS` | `244` | BSDL boundary register length |
+| `JTAG_BOUNDARY_PIN_EVENTS` | `36` | BSDL package I/O pins emitted to FIFO |
 | `FIFO_EVENT_WIDTH` | `64` | FIFO event word width |
 | `FIFO_EVENT_DEPTH` | `64` | FIFO entry count, not total bits |
 | `UART_BAUD` | `115200` | UART diagnostic output baud |
