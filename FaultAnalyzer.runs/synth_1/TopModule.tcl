@@ -101,6 +101,8 @@ read_xdc /home/tirth/Classes/Midterms_ECE3300/FaultAnalyzer/FaultAnalyzer.srcs/c
 set_property used_in_implementation false [get_files /home/tirth/Classes/Midterms_ECE3300/FaultAnalyzer/FaultAnalyzer.srcs/constrs_1/new/FaultAnalyzer.xdc]
 
 set_param ips.enableIPCacheLiteLoad 1
+
+read_checkpoint -auto_incremental -incremental /home/tirth/Classes/Midterms_ECE3300/FaultAnalyzer/FaultAnalyzer.srcs/utils_1/imports/synth_1/TopModule.dcp
 close [open __synthesis_is_running__ w]
 
 OPTRACE "synth_design" START { }
