@@ -2,10 +2,10 @@
 
 module TopModule (
     input wire clk_i,
-    input wire [15:0] sw_i,
+    input wire [15:0] SW,
 
-    input wire btnc_i,
-    input wire btnd_i,
+    input wire BNTC, //Top button
+    input wire BTND, //Bottom Button
 
     input wire jtag_tdo_i,
     output wire jtag_tck_o,
@@ -13,12 +13,12 @@ module TopModule (
     output wire jtag_tdi_o,
     output wire [15:0] led_o,
 
-    output wire [6:0] seg_o,
-    output wire [7:0] an_o,
-    output wire dp_o,
+    output wire [6:0] seg,
+    output wire [7:0] an,
+    output wire dp,
 
-    output wire uart_txd_o,
-    input wire uart_rxd_i,
+    output wire UART_RXD_OUT,
+    input wire UART_TXD_IN,
 
     output wire [3:0] vga_red_o,
     output wire [3:0] vga_green_o,
