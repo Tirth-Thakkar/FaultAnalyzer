@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 
-// VGA timing follows the common counter/sync/pixel-pattern structure used by
-// introductory FPGA VGA examples, including the Nandland VGA project.
+// Demo-oriented VGA status panel for the Nexus A100T OneKiwi 1P5 JTAG scan.
+// It intentionally stays text-free and resource-light: colored blocks encode scan, so preeety
 module VGA #(
     parameter integer H_ACTIVE = 640,
-    parameter integer H_FRONT_PORCH = 18,
-    parameter integer H_SYNC_PULSE = 92,
-    parameter integer H_BACK_PORCH = 50,
+    parameter integer H_FRONT_PORCH = 16,
+    parameter integer H_SYNC_PULSE = 96,
+    parameter integer H_BACK_PORCH = 48,
 
     parameter integer V_ACTIVE = 480,
     parameter integer V_FRONT_PORCH = 10,
@@ -23,10 +23,21 @@ module VGA #(
 
     input wire fifo_empty,
     input wire fifo_full,
+    input wire fifo_valid,
     input wire fifo_underflow,
     input wire fifo_overflow,
 
+    input wire tdo_stuck_high,
+    input wire tdo_stuck_low,
+    input wire timeout_error,
+
     input wire [3:0] jtag_state,
+    input wire [7:0] event_type,
+    input wire [15:0] event_count,
+    input wire [15:0] sw,
+    input wire [4:0] buttons,
+    input wire uart_rx_valid,
+    input wire [7:0] uart_rx_byte,
 
     output reg [3:0] vga_red,
     output reg [3:0] vga_green,
@@ -68,16 +79,39 @@ module VGA #(
 
     localparam integer FIFO_BOX_Y = 210;
     localparam integer FIFO_BOX_WIDTH = 140;
-    localparam integer FIFO_BOX_HEIGHT = 80;
+    localparam integer FIFO_BOX_HEIGHT = 72;
     localparam integer FIFO_EMPTY_BOX_X = 40;
     localparam integer FIFO_FULL_BOX_X = 220;
     localparam integer FIFO_ERROR_BOX_X = 400;
 
+    localparam integer FLAG_BOX_Y = 296;
+    localparam integer FLAG_BOX_WIDTH = 120;
+    localparam integer FLAG_BOX_HEIGHT = 32;
+    localparam integer FLAG_TDO_HIGH_X = 40;
+    localparam integer FLAG_TDO_LOW_X = 180;
+    localparam integer FLAG_TIMEOUT_X = 320;
+    localparam integer FLAG_UART_X = 460;
+
     localparam integer STATE_BAR_X = 40;
-    localparam integer STATE_BAR_Y = 340;
+    localparam integer STATE_BAR_Y = 348;
     localparam integer STATE_BAR_WIDTH = 512;
-    localparam integer STATE_BAR_HEIGHT = 80;
+    localparam integer STATE_BAR_HEIGHT = 48;
     localparam integer STATE_BAR_SEGMENT_WIDTH = 32;
+
+    localparam integer EVENT_STRIP_X = 40;
+    localparam integer EVENT_STRIP_Y = 410;
+    localparam integer EVENT_STRIP_SEGMENT_WIDTH = 28;
+    localparam integer EVENT_STRIP_HEIGHT = 18;
+
+    localparam integer SWITCH_STRIP_X = 40;
+    localparam integer SWITCH_STRIP_Y = 442;
+    localparam integer SWITCH_STRIP_SEGMENT_WIDTH = 28;
+    localparam integer SWITCH_STRIP_HEIGHT = 24;
+
+    localparam integer BUTTON_STRIP_X = 508;
+    localparam integer BUTTON_STRIP_Y = 442;
+    localparam integer BUTTON_STRIP_SEGMENT_WIDTH = 20;
+    localparam integer BUTTON_STRIP_HEIGHT = 24;
 
     // -------------------------------------------------------------------------
     // Seven-segment glyph geometry for IDCODE drawing
@@ -121,6 +155,9 @@ module VGA #(
     localparam [11:0] COLOR_FIFO_ERROR = 12'hF00;
     localparam [11:0] COLOR_STATE_ACTIVE = 12'h84F;
     localparam [11:0] COLOR_STATE_INACTIVE = 12'h111;
+    localparam [11:0] COLOR_CONTROL_ON = 12'h0C4;
+    localparam [11:0] COLOR_CONTROL_OFF = 12'h333;
+    localparam [11:0] COLOR_UART_RX = 12'h0AF;
 
     // -------------------------------------------------------------------------
     // Timing state
@@ -143,12 +180,23 @@ module VGA #(
 
     integer digit_index;
     integer digit_left;
+    integer strip_index;
+    integer strip_left;
+    reg [3:0] strip_bit;
     reg [3:0] digit_nibble;
     reg [5:0] digit_x;
     reg [5:0] digit_y;
     reg [6:0] digit_segments;
     reg digit_region_hit;
     reg digit_segment_hit;
+    reg switch_region_hit;
+    reg switch_bit_value;
+    reg event_region_hit;
+    reg event_bit_value;
+    reg event_type_region_hit;
+    reg event_type_bit_value;
+    reg button_region_hit;
+    reg button_bit_value;
     reg [11:0] pixel_color;
 
     wire header_region;
@@ -156,6 +204,10 @@ module VGA #(
     wire fifo_empty_region;
     wire fifo_full_region;
     wire fifo_error_region;
+    wire tdo_high_region;
+    wire tdo_low_region;
+    wire timeout_region;
+    wire uart_region;
     wire state_bar_region;
 
     assign pixel_tick = (pixel_divider == PIXEL_TICK_COUNT);
@@ -195,6 +247,26 @@ module VGA #(
                                (v_count >= FIFO_BOX_Y) &&
                                (v_count < FIFO_BOX_Y + FIFO_BOX_HEIGHT);
 
+    assign tdo_high_region = (h_count >= FLAG_TDO_HIGH_X) &&
+                             (h_count < FLAG_TDO_HIGH_X + FLAG_BOX_WIDTH) &&
+                             (v_count >= FLAG_BOX_Y) &&
+                             (v_count < FLAG_BOX_Y + FLAG_BOX_HEIGHT);
+
+    assign tdo_low_region = (h_count >= FLAG_TDO_LOW_X) &&
+                            (h_count < FLAG_TDO_LOW_X + FLAG_BOX_WIDTH) &&
+                            (v_count >= FLAG_BOX_Y) &&
+                            (v_count < FLAG_BOX_Y + FLAG_BOX_HEIGHT);
+
+    assign timeout_region = (h_count >= FLAG_TIMEOUT_X) &&
+                            (h_count < FLAG_TIMEOUT_X + FLAG_BOX_WIDTH) &&
+                            (v_count >= FLAG_BOX_Y) &&
+                            (v_count < FLAG_BOX_Y + FLAG_BOX_HEIGHT);
+
+    assign uart_region = (h_count >= FLAG_UART_X) &&
+                         (h_count < FLAG_UART_X + FLAG_BOX_WIDTH) &&
+                         (v_count >= FLAG_BOX_Y) &&
+                         (v_count < FLAG_BOX_Y + FLAG_BOX_HEIGHT);
+
     assign state_bar_region = (h_count >= STATE_BAR_X) &&
                               (h_count < STATE_BAR_X + STATE_BAR_WIDTH) &&
                               (v_count >= STATE_BAR_Y) &&
@@ -232,6 +304,59 @@ module VGA #(
                         default: digit_nibble = idcode[3:0];
                     endcase
                 end
+            end
+        end
+    end
+
+    always @(*) begin : proc_control_strip_select
+        switch_region_hit = 1'b0;
+        switch_bit_value = 1'b0;
+        event_region_hit = 1'b0;
+        event_bit_value = 1'b0;
+        event_type_region_hit = 1'b0;
+        event_type_bit_value = 1'b0;
+        button_region_hit = 1'b0;
+        button_bit_value = 1'b0;
+        strip_left = SWITCH_STRIP_X;
+        strip_bit = 4'd0;
+
+        for (strip_index = 0; strip_index < 16; strip_index = strip_index + 1) begin
+            strip_left = SWITCH_STRIP_X + (strip_index * SWITCH_STRIP_SEGMENT_WIDTH);
+            strip_bit = strip_index[3:0];
+
+            if ((h_count >= strip_left) &&
+                (h_count < strip_left + SWITCH_STRIP_SEGMENT_WIDTH - 4) &&
+                (v_count >= SWITCH_STRIP_Y) &&
+                (v_count < SWITCH_STRIP_Y + SWITCH_STRIP_HEIGHT)) begin
+                switch_region_hit = 1'b1;
+                switch_bit_value = sw[strip_bit];
+            end
+
+            strip_left = EVENT_STRIP_X + (strip_index * EVENT_STRIP_SEGMENT_WIDTH);
+
+            if ((h_count >= strip_left) &&
+                (h_count < strip_left + EVENT_STRIP_SEGMENT_WIDTH - 4) &&
+                (v_count >= EVENT_STRIP_Y) &&
+                (v_count < EVENT_STRIP_Y + EVENT_STRIP_HEIGHT)) begin
+                event_region_hit = 1'b1;
+                event_bit_value = event_count[strip_bit];
+
+                if (strip_index < 8) begin
+                    event_type_region_hit = 1'b1;
+                    event_type_bit_value = event_type[strip_bit[2:0]];
+                end
+            end
+        end
+
+        for (strip_index = 0; strip_index < 5; strip_index = strip_index + 1) begin
+            strip_left = BUTTON_STRIP_X + (strip_index * BUTTON_STRIP_SEGMENT_WIDTH);
+
+            if ((h_count >= strip_left) &&
+                (h_count < strip_left + BUTTON_STRIP_SEGMENT_WIDTH - 4) &&
+                (v_count >= BUTTON_STRIP_Y) &&
+                (v_count < BUTTON_STRIP_Y + BUTTON_STRIP_HEIGHT)) begin
+                button_region_hit = 1'b1;
+                button_bit_value = buttons[strip_index[2:0]];
             end
         end
     end
@@ -376,7 +501,25 @@ module VGA #(
             end
 
             if (fifo_error_region) begin
-                pixel_color = (fifo_underflow || fifo_overflow) ? COLOR_FIFO_ERROR : COLOR_FIFO_OK;
+                pixel_color = (fifo_underflow || fifo_overflow) ? COLOR_FIFO_ERROR :
+                    (fifo_valid ? COLOR_FIFO_ACTIVE : COLOR_FIFO_OK);
+            end
+
+            if (tdo_high_region) begin
+                pixel_color = tdo_stuck_high ? COLOR_FIFO_ERROR : COLOR_FIFO_OK;
+            end
+
+            if (tdo_low_region) begin
+                pixel_color = tdo_stuck_low ? COLOR_FIFO_ERROR : COLOR_FIFO_OK;
+            end
+
+            if (timeout_region) begin
+                pixel_color = timeout_error ? COLOR_FIFO_ERROR : COLOR_FIFO_OK;
+            end
+
+            if (uart_region) begin
+                pixel_color = uart_rx_valid ? COLOR_UART_RX :
+                    (uart_rx_byte[0] ? COLOR_CONTROL_ON : COLOR_CONTROL_OFF);
             end
 
             if (state_bar_region) begin
@@ -385,6 +528,22 @@ module VGA #(
                 end else begin
                     pixel_color = COLOR_STATE_INACTIVE;
                 end
+            end
+
+            if (event_region_hit) begin
+                pixel_color = event_bit_value ? COLOR_STATE_ACTIVE : COLOR_STATE_INACTIVE;
+            end
+
+            if (event_type_region_hit) begin
+                pixel_color = event_type_bit_value ? COLOR_UART_RX : pixel_color;
+            end
+
+            if (switch_region_hit) begin
+                pixel_color = switch_bit_value ? COLOR_CONTROL_ON : COLOR_CONTROL_OFF;
+            end
+
+            if (button_region_hit) begin
+                pixel_color = button_bit_value ? COLOR_IDCODE_PENDING : COLOR_CONTROL_OFF;
             end
         end
 
