@@ -6,11 +6,9 @@ module FaultAnalyzer_tb;
 
   reg tb_clk;
   reg tb_rst;
-  reg [15:0] tb_sw;
+  reg [5:0] tb_sw;
   reg tb_btnc;
   reg tb_btnu;
-  reg tb_btnl;
-  reg tb_btnr;
   reg tb_jtag_tdo;
   reg tb_uart_rxd;
   wire tb_jtag_tck;
@@ -41,12 +39,15 @@ module FaultAnalyzer_tb;
 
   TopModule dut (
       .clk_i(tb_clk),
-      .sw_i(tb_sw),
+      .sw_start_scan_i(tb_sw[0]),
+      .sw_boundary_a_i(tb_sw[1]),
+      .sw_boundary_b_i(tb_sw[2]),
+      .sw_boundary_c_i(tb_sw[3]),
+      .sw_boundary_d_i(tb_sw[4]),
+      .sw_fifo_read_i(tb_sw[5]),
       .btnc_i(tb_btnc),
       .btnu_i(tb_btnu),
       .btnd_i(tb_rst),
-      .btnl_i(tb_btnl),
-      .btnr_i(tb_btnr),
       .jtag_tdo_i(tb_jtag_tdo),
       .jtag_tck_o(tb_jtag_tck),
       .jtag_tms_o(tb_jtag_tms),
@@ -145,11 +146,9 @@ module FaultAnalyzer_tb;
 
   initial begin
     tb_rst = 1'b0;
-    tb_sw = 16'd0;
+    tb_sw = 6'd0;
     tb_btnc = 1'b0;
     tb_btnu = 1'b0;
-    tb_btnl = 1'b0;
-    tb_btnr = 1'b0;
     tb_jtag_tdo = 1'b0;
     tb_uart_rxd = 1'b1;
     tb_binary_in = 16'd0;

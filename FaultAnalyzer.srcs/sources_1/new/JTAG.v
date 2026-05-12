@@ -9,7 +9,6 @@ module JTAG #(
     parameter integer BOUNDARY_REGISTER_BITS = 244,
     parameter integer BOUNDARY_PIN_COUNT = 36,
     parameter integer BOUNDARY_WIDTH = 6,
-    parameter [BOUNDARY_WIDTH-1:0] EXPECTED_BOUNDARY_DATA = {BOUNDARY_WIDTH{1'b0}},
     parameter integer TIMEOUT_CYCLES = 1_000_000
 ) (
     input wire clk,
@@ -19,7 +18,6 @@ module JTAG #(
     input wire tdo,
     input wire use_internal_target,
     input wire [3:0] boundary_inputs,
-    input wire [BOUNDARY_WIDTH-1:0] boundary_scan_data,
 
     output wire tck,
     output reg tms,
@@ -610,7 +608,6 @@ module JTAG_READY_IC(TDI,TCK,TMS,TRST,a,b,c,d,i,j,TDO,STATE);
     localparam [1:0] BYPASS = 2'b00, SAMPLE = 2'b01, EXTEST = 2'b10;
     wire MUX_OUT_SEL;
     wire Mode;
-    wire instr_bypass = (Instruction == BYPASS);
     wire instr_sample = (Instruction == SAMPLE);
     wire instr_exttest = (Instruction == EXTEST);
     assign MUX_OUT_SEL = instr_sample | instr_exttest;

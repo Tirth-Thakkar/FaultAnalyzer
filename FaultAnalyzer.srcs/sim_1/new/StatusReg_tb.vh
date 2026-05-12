@@ -32,7 +32,7 @@ task automatic tb_test_statusreg;
     tb_expect_equal32({31'd0, dut.status_scan_done}, 32'd1, "StatusReg scan done");
     tb_expect_equal32({24'd0, dut.status_event_type}, {24'd0, `TB_JTAG_EVENT_TYPE_IDCODE},
                       "StatusReg event type");
-    tb_expect_equal32({16'd0, dut.status_timestamp}, 32'h0000_55AA, "StatusReg timestamp");
+    tb_expect_equal32({16'd0, dut.u_status.timestamp}, 32'h0000_55AA, "StatusReg timestamp");
 
     release dut.jtag_event_valid;
     release dut.jtag_event_word;

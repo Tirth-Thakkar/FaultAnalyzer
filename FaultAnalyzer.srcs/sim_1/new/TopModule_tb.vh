@@ -7,11 +7,9 @@ task automatic tb_test_topmodule;
   begin
     $display("TEST: TopModule controls and UART status formatter");
 
-    tb_sw = 16'd0;
+    tb_sw = 6'd0;
     tb_btnc = 1'b0;
     tb_btnu = 1'b0;
-    tb_btnl = 1'b0;
-    tb_btnr = 1'b0;
     tb_uart_rxd = 1'b1;
     tb_jtag_tdo = 1'b0;
     tb_apply_reset();

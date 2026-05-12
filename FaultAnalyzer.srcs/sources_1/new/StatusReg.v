@@ -6,16 +6,8 @@ module StatusReg (
     input wire event_valid,
     input wire [63:0] event_word,
     input wire scan_busy,
-    input wire fifo_empty,
-    input wire fifo_full,
-    input wire fifo_almost_full,
-    input wire fifo_valid,
     input wire fifo_underflow,
     input wire fifo_overflow_attempt,
-    input wire jtag_tck,
-    input wire jtag_tms,
-    input wire jtag_tdi,
-    input wire jtag_tdo,
 
     output reg [31:0] latest_idcode,
     output reg id_match,
@@ -28,28 +20,11 @@ module StatusReg (
     output reg [15:0] timestamp,
     output reg fifo_underflow_latched,
     output reg fifo_overflow_latched,
-    output reg [15:0] event_count,
-    output wire [15:0] status_led_bus
+    output reg [15:0] event_count
 );
 
   localparam [7:0] EVENT_TYPE_IDCODE = 8'h01;
   localparam [7:0] EVENT_TYPE_TIMEOUT = 8'hEE;
-
-  assign status_led_bus = {
-    jtag_tdo,
-    jtag_tdi,
-    jtag_tms,
-    jtag_tck,
-    jtag_state,
-    scan_busy,
-    fifo_overflow_latched,
-    fifo_underflow_latched,
-    fifo_full,
-    fifo_empty,
-    scan_done && !id_match,
-    id_match,
-    scan_done
-  };
 
   always @(posedge clk) begin
     if (rst) begin
@@ -91,8 +66,8 @@ module StatusReg (
         end
       end
 
-      if (fifo_underflow || fifo_valid) begin
-        fifo_underflow_latched <= fifo_underflow_latched | fifo_underflow;
+      if (fifo_underflow) begin
+        fifo_underflow_latched <= 1'b1;
       end
 
       if (fifo_overflow_attempt) begin

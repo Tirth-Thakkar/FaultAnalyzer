@@ -13,8 +13,6 @@ task automatic tb_test_jtag;
                       "JTAG BSDL boundary register length");
     tb_expect_equal32(dut.u_jtag.BOUNDARY_PIN_COUNT, `TB_JTAG_BOUNDARY_PIN_COUNT,
                       "JTAG BSDL pin event count");
-    tb_expect_equal32({24'h0, dut.u_jtag.EXPECTED_BOUNDARY_DATA}, 32'h0000_0000,
-                      "JTAG expected boundary data");
 
     tb_apply_reset();
     #1;
